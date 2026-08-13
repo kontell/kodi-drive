@@ -102,7 +102,9 @@ prevent.
 [`kodi-skin-res-scaling`](../kodi-skin-res-scaling/SKILL.md)
 
 **Kodi's own data**
-[`kodi-library-data`](../kodi-library-data/SKILL.md)
+[`kodi-library-data`](../kodi-library-data/SKILL.md) ·
+[`kodi-database-writing`](../kodi-database-writing/SKILL.md) ·
+[`kodi-texture-cache`](../kodi-texture-cache/SKILL.md)
 
 **Shipping it**
 [`kodi-versions-abi`](../kodi-versions-abi/SKILL.md) ·

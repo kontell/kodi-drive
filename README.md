@@ -82,6 +82,7 @@ consolation prize.
 - [`kodi-clean-profile`](skills/kodi-clean-profile/SKILL.md) — Isolate a Kodi problem by reproducing it in a clean profile with no add-ons, then bisect to find the culprit.
 - [`kodi-connect`](skills/kodi-connect/SKILL.md) — Find a Kodi on the network and get control of it — JSON-RPC, EventServer, ADB, or SSH — and store its address and credentials safely.
 - [`kodi-contributing`](skills/kodi-contributing/SKILL.md) — Get a change accepted into Kodi itself, or an add-on into the official repository.
+- [`kodi-database-writing`](skills/kodi-database-writing/SKILL.md) — Write to Kodi's own library databases without corrupting them or wedging Kodi.
 - [`kodi-freeze-diagnosis`](skills/kodi-freeze-diagnosis/SKILL.md) — Work out why Kodi froze, hung, or stopped responding — including getting native backtraces off an unrooted Android TV box.
 - [`kodi-jsonrpc`](skills/kodi-jsonrpc/SKILL.md) — Use Kodi's JSON-RPC API as ground truth instead of guessing from screenshots.
 - [`kodi-known-defects`](skills/kodi-known-defects/SKILL.md) — Kodi and inputstream.adaptive defects confirmed by investigation, with their symptoms, upstream status, and how to recognise each from a log.
@@ -96,6 +97,7 @@ consolation prize.
 - [`kodi-skin-res-scaling`](skills/kodi-skin-res-scaling/SKILL.md) — Understand Kodi's skin coordinate spaces and which XML file wins when two share a name.
 - [`kodi-skin-xml`](skills/kodi-skin-xml/SKILL.md) — Edit Kodi skin XML without silent failures.
 - [`kodi-test-rig`](skills/kodi-test-rig/SKILL.md) — Stand up a throwaway Kodi an agent can restart, misconfigure, and break.
+- [`kodi-texture-cache`](skills/kodi-texture-cache/SKILL.md) — Serve artwork Kodi caches efficiently, and understand when caching saves nothing at all.
 - [`kodi-triage`](skills/kodi-triage/SKILL.md) — Turn a vague Kodi complaint into a diagnosis.
 - [`kodi-ui-navigation`](skills/kodi-ui-navigation/SKILL.md) — Navigate Kodi's UI blind without firing actions at the wrong control.
 - [`kodi-versions-abi`](skills/kodi-versions-abi/SKILL.md) — Pick a version number and an API level that the Kodi versions you care about will actually accept.

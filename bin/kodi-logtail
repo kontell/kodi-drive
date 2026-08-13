@@ -4,7 +4,8 @@
 # Usage:
 #   kodi-logtail mark            record the current size as a marker
 #   kodi-logtail since           print everything written since the mark
-#   kodi-logtail errors          only ERROR/WARNING/FATAL since the mark
+#   kodi-logtail errors          Kodi's own error/warning lines since the mark
+#   kodi-logtail addon-errors    add-on tracebacks and ERROR:: lines
 #   kodi-logtail tail [N]        last N lines (default 50), ignoring the mark
 #   kodi-logtail grep <pattern>  extended-regex search since the mark
 #
@@ -85,8 +86,23 @@ case "${1:-since}" in
         tail -c "+$(( $(start_offset) + 1 ))" "$KODI_LOG"
         ;;
     errors)
+        # Kodi 21 writes severities in LOWER case ("warning", "error"). A grep
+        # for "ERROR" finds nothing and reports every run clean — measured on
+        # 21.3: 220 real severity lines, zero uppercase matches among them.
+        #
+        # Anchored on the `<component>` field that follows the severity, because
+        # add-ons log their own uppercase level inside the message text
+        # ("JELLYFIN... -> ERROR::service.py"). On the same log an unanchored
+        # uppercase grep returned 2 hits, both add-on messages on info-severity
+        # lines, and missed all 220 genuine ones.
         tail -c "+$(( $(start_offset) + 1 ))" "$KODI_LOG" \
-            | grep -E 'ERROR|WARNING|FATAL|SEVERE' || true
+            | grep -iE '[[:space:]](error|warning|fatal|severe)[[:space:]]+<' || true
+        ;;
+    addon-errors)
+        # Add-on-level severities, which live in the message body rather than
+        # Kodi's own severity field.
+        tail -c "+$(( $(start_offset) + 1 ))" "$KODI_LOG" \
+            | grep -E '(ERROR|CRITICAL|Traceback|Exception)' || true
         ;;
     grep)
         [ $# -ge 2 ] || { echo "usage: kodi-logtail grep <pattern>" >&2; exit 2; }

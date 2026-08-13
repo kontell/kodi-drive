@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""kodi-builtin — run a Kodi builtin via the EventServer (UDP 9777).
+
+JSON-RPC cannot do this. `Input.ExecuteAction` accepts only a fixed enum of
+action names, so there is no JSON-RPC route to `ReloadSkin()`,
+`ActivateWindow(...)`, `Skin.SetString(...)`, or any other builtin. The
+EventServer's PT_ACTION packet carries an arbitrary builtin string, which makes
+this the only remote way to reach them.
+
+Usage:
+    kodi-builtin "ReloadSkin()"
+    kodi-builtin "ActivateWindow(Home)"
+    kodi-builtin "SetFocus(9000,3)"
+
+Caveat worth knowing: the EventServer is fire-and-forget UDP. There is no
+response, no acknowledgement, and no error if Kodi rejects the builtin or is not
+listening. Confirm the effect with `kodi-shot` or a JSON-RPC read — never assume
+it landed.
+
+Enable it in Kodi: Settings > Services > Control >
+"Allow programs on other systems to control Kodi".
+
+Target comes from ~/.config/kodi-drive/targets.env; see targets.env.example.
+
+Licence: GPL-2.0-or-later
+"""
+
+from __future__ import annotations
+
+import socket
+import struct
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+import kodi_target  # noqa: E402
+
+MAGIC = b"XBMC"
+VER_MAJOR, VER_MINOR = 2, 0
+PT_ACTION = 0x0A
+ACTION_EXECBUILTIN = 0x01
+UID = 0xC0DE0001
+
+
+def packet(ptype: int, payload: bytes) -> bytes:
+    # No HELO on purpose: Kodi raises a "Detected new connection" toast for
+    # every HELO, which pollutes any screenshot taken afterwards. PT_ACTION
+    # works without one.
+    header = (
+        MAGIC
+        + bytes([VER_MAJOR, VER_MINOR])
+        + struct.pack(">H", ptype)
+        + struct.pack(">I", 1)          # packet 1
+        + struct.pack(">I", 1)          # of 1
+        + struct.pack(">H", len(payload))
+        + struct.pack(">I", UID)
+        + b"\x00" * 10                  # reserved
+    )
+    return header + payload
+
+
+def send_builtin(cmd: str, host: str, port: int) -> None:
+    payload = bytes([ACTION_EXECBUILTIN]) + cmd.encode("utf-8") + b"\x00"
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.sendto(packet(PT_ACTION, payload), (host, port))
+
+
+def main() -> int:
+    if len(sys.argv) != 2 or sys.argv[1] in ("-h", "--help"):
+        print(__doc__, file=sys.stderr)
+        return 2
+
+    cfg = kodi_target.load()
+    try:
+        port = int(cfg["ESPORT"])
+    except ValueError:
+        print(f"kodi-builtin: ESPORT {cfg['ESPORT']!r} is not a port number",
+              file=sys.stderr)
+        return 2
+
+    try:
+        send_builtin(sys.argv[1], cfg["HOST"], port)
+    except OSError as exc:
+        print(f"kodi-builtin: could not send to {cfg['HOST']}:{port}: {exc}",
+              file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

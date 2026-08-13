@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# kodi-shot — take a Kodi screenshot, wait for it to land, print its path.
+#
+# Usage:
+#   kodi-shot [--raw] [--width N] [--out DIR]
+#
+#   --raw       skip downscaling, print the original PNG
+#   --width N   downscale width (default 1280) — smaller is cheaper to look at
+#   --out DIR   where to write the downscaled copy
+#
+# The waiting is the point. Kodi's screenshot action returns immediately while
+# the PNG is still being written, so a naive "trigger then read" gets a partial
+# file or the previous shot. This polls for a new file whose size has stopped
+# changing.
+#
+# The screenshot directory is read from Kodi itself (debug.screenshotpath), so
+# there is usually nothing to configure. Override with KODI_SHOTS if Kodi writes
+# somewhere this machine cannot see — which is the normal case for a remote or
+# Android target.
+#
+# Licence: GPL-2.0-or-later
+
+set -euo pipefail
+
+# shellcheck source=../lib/kodi-target.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/kodi-target.sh"
+kd_load_target
+
+raw=0
+out_dir="${KODI_SHOT_OUT_DIR:-${TMPDIR:-/tmp}/kodi-shots}"
+width="${KODI_SHOT_WIDTH:-1280}"
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --raw)   raw=1; shift ;;
+        --width) width="$2"; shift 2 ;;
+        --out)   out_dir="$2"; shift 2 ;;
+        -h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "kodi-shot: unknown argument '$1'" >&2; exit 2 ;;
+    esac
+done
+
+kd_require_rpc
+
+# Ask Kodi where it puts screenshots rather than making the user tell us twice.
+discover_shot_dir() {
+    local body path
+    body=$(kd_rpc '{"jsonrpc":"2.0","method":"Settings.GetSettingValue","params":{"setting":"debug.screenshotpath"},"id":1}' 2>/dev/null) || return 1
+    path=$(printf '%s' "$body" | python3 -c '
+import json,sys
+try:
+    v = json.load(sys.stdin).get("result", {}).get("value", "")
+except Exception:
+    v = ""
+print(v or "")
+')
+    [ -n "$path" ] || return 1
+    # special:// paths are Kodi-internal and only resolvable on the Kodi host.
+    case "$path" in
+        special://*) return 1 ;;
+    esac
+    printf '%s' "${path%/}"
+}
+
+shot_dir="${KODI_SHOTS:-}"
+[ -n "$shot_dir" ] || shot_dir="$(discover_shot_dir || true)"
+
+if [ -z "$shot_dir" ] || [ ! -d "$shot_dir" ]; then
+    cat >&2 <<EOF
+kodi-shot: cannot find the screenshot directory${shot_dir:+ ($shot_dir)}
+
+Kodi writes screenshots to the path in
+  Settings > Media > "Screenshot folder"  (setting id: debug.screenshotpath)
+
+Set that to a real directory, then either let this script read it back, or set
+KODI_SHOTS (or KODI_<TARGET>_SHOTS in targets.env) to the same path as seen from
+*this* machine.
+
+If Kodi is on another host or on Android, this machine cannot see that directory
+directly — pull it over adb or ssh instead. See the kodi-adb skill.
+EOF
+    exit 1
+fi
+
+mkdir -p "$out_dir"
+
+newest() { ls -1t "$shot_dir"/screenshot*.png 2>/dev/null | head -n1 || true; }
+
+before="$(newest)"
+
+kd_rpc '{"jsonrpc":"2.0","method":"Input.ExecuteAction","params":{"action":"screenshot"},"id":1}' >/dev/null
+
+# Poll for a new PNG whose size has settled. Two equal reads 150 ms apart is
+# enough; Kodi writes these in one pass.
+deadline=$(( $(date +%s) + ${KODI_SHOT_TIMEOUT:-5} ))
+new=""
+while [ "$(date +%s)" -lt "$deadline" ]; do
+    candidate="$(newest)"
+    if [ -n "$candidate" ] && [ "$candidate" != "$before" ]; then
+        s1=$(stat -c%s "$candidate" 2>/dev/null || stat -f%z "$candidate" 2>/dev/null || echo 0)
+        sleep 0.15
+        s2=$(stat -c%s "$candidate" 2>/dev/null || stat -f%z "$candidate" 2>/dev/null || echo 0)
+        if [ "$s1" -gt 0 ] && [ "$s1" = "$s2" ]; then
+            new="$candidate"
+            break
+        fi
+    fi
+    sleep 0.1
+done
+
+if [ -z "$new" ]; then
+    echo "kodi-shot: no new screenshot appeared in $shot_dir within ${KODI_SHOT_TIMEOUT:-5}s" >&2
+    echo "  Kodi may have refused the action, or may be writing somewhere else." >&2
+    exit 1
+fi
+
+if [ "$raw" -eq 1 ]; then
+    printf '%s\n' "$new"
+    exit 0
+fi
+
+if ! command -v magick >/dev/null 2>&1; then
+    echo "kodi-shot: ImageMagick 'magick' not found; returning the full-size PNG" >&2
+    printf '%s\n' "$new"
+    exit 0
+fi
+
+out="$out_dir/shot-$(date +%Y%m%d-%H%M%S).png"
+magick "$new" -resize "${width}x" -strip "$out"
+printf '%s\n' "$out"

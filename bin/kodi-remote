@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+# kodi-remote — drive Kodi's UI over JSON-RPC.
+#
+# Usage:
+#   kodi-remote <cmd> [cmd ...]
+#
+# Commands:
+#   up down left right ok back menu home info osd
+#   pageup pagedown
+#   reload                  ReloadSkin() via EventServer
+#   debug                   Skin.ToggleDebug() — overlay shows the active window
+#                           id and focused control id, which is how you find the
+#                           XML file responsible for what you are looking at
+#   screenshot              screenshot action (prefer kodi-shot, which waits)
+#   sleep <ms>              wait N ms
+#   text "<string>"         Input.SendText
+#   action <name>           any Input.ExecuteAction name
+#   get <method> [params]   JSON-RPC call; params is a JSON object.
+#                           A *.GetProperties call with no params returns null
+#                           rather than erroring, so pass them explicitly:
+#                             get Application.GetProperties '{"properties":["version"]}'
+#                           Discover a method's arguments with:
+#                             get JSONRPC.Introspect
+#
+# Navigation is blind: Kodi does not tell you where focus went. Confirm with
+# `kodi-shot` or a `get` before acting on the result. See the kodi-ui-navigation
+# skill for the traps (lists wrap, dialogs default to the safe button, and so on).
+#
+# A ${KODI_REMOTE_GAP_MS:-150} ms gap is inserted between commands.
+# Target comes from ~/.config/kodi-drive/targets.env; see targets.env.example.
+#
+# Licence: GPL-2.0-or-later
+
+set -euo pipefail
+
+# shellcheck source=../lib/kodi-target.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/kodi-target.sh"
+kd_load_target
+
+: "${KODI_REMOTE_GAP_MS:=150}"
+
+send_rpc() { kd_rpc "$1" >/dev/null; }
+
+method() { send_rpc "$(printf '{"jsonrpc":"2.0","method":"Input.%s","id":1}' "$1")"; }
+act()    { send_rpc "$(printf '{"jsonrpc":"2.0","method":"Input.ExecuteAction","params":{"action":"%s"},"id":1}' "$1")"; }
+naptime() { python3 -c 'import sys,time; time.sleep(float(sys.argv[1])/1000.0)' "$1"; }
+
+# get <method> [params-json]
+#
+# Most *.GetProperties methods return null for an empty params object rather
+# than erroring, which reads as "no data" instead of "you forgot the argument".
+# Pass the properties explicitly:
+#
+#   kodi-remote get JSONRPC.Version
+#   kodi-remote get Application.GetProperties '{"properties":["version","volume"]}'
+#   kodi-remote get Player.GetActivePlayers
+#
+# Use `kodi-remote get JSONRPC.Introspect` to discover what a method accepts.
+get() {
+    local m="$1" params="${2:-{\}}" body
+    case "$params" in
+        \{*) ;;
+        *) echo "kodi-remote get: params must be a JSON object, got '$params'" >&2
+           return 2 ;;
+    esac
+    body=$(kd_rpc "$(printf '{"jsonrpc":"2.0","method":"%s","params":%s,"id":1}' "$m" "$params")")
+    if command -v jq >/dev/null 2>&1; then
+        # Surface errors rather than printing a bare null and looking like
+        # an empty-but-successful read.
+        if printf '%s' "$body" | jq -e '.error' >/dev/null 2>&1; then
+            printf '%s' "$body" | jq . >&2
+            return 1
+        fi
+        printf '%s' "$body" | jq .result
+    else
+        printf '%s\n' "$body"
+    fi
+}
+
+send() {
+    case "$1" in
+        up)                       method Up ;;
+        down)                     method Down ;;
+        left)                     method Left ;;
+        right)                    method Right ;;
+        ok|select)                method Select ;;
+        back|esc)                 method Back ;;
+        home)                     method Home ;;
+        info)                     method Info ;;
+        osd)                      method ShowOSD ;;
+        menu|context|contextmenu) method ContextMenu ;;
+        pageup)                   act pageup ;;
+        pagedown)                 act pagedown ;;
+        # ReloadSkin() is a builtin, and JSON-RPC's Input.ExecuteAction only
+        # accepts a fixed action enum — so builtins go via the EventServer.
+        reload)                   kodi-builtin 'ReloadSkin()' ;;
+        debug)                    kodi-builtin 'Skin.ToggleDebug()' ;;
+        screenshot)               act screenshot ;;
+        action)                   act "$2" ;;
+        sleep)                    naptime "$2" ;;
+        get)                      get "$2" "${3:-}" ;;
+        text)
+            local escaped
+            escaped=$(printf '%s' "$2" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
+            send_rpc "{\"jsonrpc\":\"2.0\",\"method\":\"Input.SendText\",\"params\":{\"text\":$escaped,\"done\":false},\"id\":1}" ;;
+        *) echo "kodi-remote: unknown command '$1'" >&2; return 2 ;;
+    esac
+}
+
+if [ $# -eq 0 ]; then
+    sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+fi
+
+kd_require_rpc
+
+first=1
+while [ $# -gt 0 ]; do
+    [ "$first" -eq 0 ] && naptime "$KODI_REMOTE_GAP_MS"
+    first=0
+    case "$1" in
+        get)
+            # An optional params object may follow the method name.
+            if [ $# -ge 3 ] && [ "${3#\{}" != "$3" ]; then
+                send get "$2" "$3"; shift 3
+            else
+                send get "$2"; shift 2
+            fi ;;
+        sleep|text|action) send "$1" "$2"; shift 2 ;;
+        *)                 send "$1"; shift ;;
+    esac
+done

@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+# kodi-diff — did the screen actually change?
+#
+# Usage:
+#   kodi-diff <before.png> <after.png> [--out DIFF.png] [--threshold N] [--no-mask]
+#
+# Prints one of:
+#   identical (<pct>% differing, clock masked)
+#   changed   (<pct>% differing, diff=<path>)
+#
+# Exits 0 if below threshold, 1 if changed — so it composes with && and ||.
+#
+# Why the mask: Kodi's clock ticks, so two screenshots of a completely static
+# screen are never byte-identical. The top-right corner is blanked in both
+# images before comparing, and a small pixel threshold absorbs anti-aliasing
+# jitter. Without that, everything reads as "changed" and the tool is useless.
+#
+# --threshold is a FRACTION of normalised RMSE (default 0.002 = 0.2%), not a
+# pixel count. Measured on Kodi 21.3 at 1280x720 with an Estuary-derived skin:
+#
+#   two shots of a static screen   0.0000
+#   list focus moved one row       0.2176
+#   window changed entirely        0.2100
+#
+# Note that RMSE does not usefully rank *how much* changed — a focus highlight
+# scored slightly higher than a whole new window. Treat the number as a yes/no
+# signal, not a magnitude. The default threshold sits far below both, so it
+# answers "did anything happen" reliably while absorbing anti-aliasing jitter.
+#
+# The mask region scales with image width, so it works at any resolution.
+# Override with KODI_DIFF_MASK (an ImageMagick geometry, e.g. 140x40+1140+0),
+# or turn it off with --no-mask when comparing regions that include the clock.
+#
+# Licence: GPL-2.0-or-later
+
+set -euo pipefail
+
+threshold="${KODI_DIFF_THRESHOLD:-0.002}"
+out=""
+mask=1
+a=""
+b=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --out)       out="$2"; shift 2 ;;
+        --threshold) threshold="$2"; shift 2 ;;
+        --no-mask)   mask=0; shift ;;
+        -h|--help)   sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -*)          echo "kodi-diff: unknown argument '$1'" >&2; exit 2 ;;
+        *)
+            if   [ -z "$a" ]; then a="$1"
+            elif [ -z "$b" ]; then b="$1"
+            else echo "kodi-diff: too many arguments" >&2; exit 2
+            fi
+            shift ;;
+    esac
+done
+
+if [ -z "$a" ] || [ -z "$b" ]; then
+    sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//' >&2
+    exit 2
+fi
+
+for f in "$a" "$b"; do
+    [ -f "$f" ] || { echo "kodi-diff: no such file: $f" >&2; exit 2; }
+done
+
+if ! command -v magick >/dev/null 2>&1; then
+    echo "kodi-diff: ImageMagick 'magick' not found. Install imagemagick." >&2
+    exit 2
+fi
+
+[ -n "$out" ] || out="${TMPDIR:-/tmp}/kodi-shots/diff-$(date +%Y%m%d-%H%M%S).png"
+mkdir -p "$(dirname "$out")"
+
+tmp_a=$(mktemp -t kodi-diff-a.XXXXXX.png)
+tmp_b=$(mktemp -t kodi-diff-b.XXXXXX.png)
+trap 'rm -f "$tmp_a" "$tmp_b"' EXIT
+
+if [ "$mask" -eq 1 ]; then
+    if [ -n "${KODI_DIFF_MASK:-}" ]; then
+        geometry="$KODI_DIFF_MASK"
+    else
+        # Blank the top-right ~11% x 3.7% of the frame, which is where Estuary
+        # and its derivatives draw the clock. Derived from width so it holds at
+        # 720p, 1080p, and the non-1080p logical coordinate spaces some skins
+        # declare in addon.xml.
+        # The trailing newline matters: without it `read` hits EOF, returns
+        # non-zero, and `set -e` kills the script with no output at all.
+        read -r w h < <(magick identify -format "%w %h\n" "$a")
+        mw=$(( w * 11 / 100 )); mh=$(( h * 37 / 1000 ))
+        geometry="${mw}x${mh}+$(( w - mw ))+0"
+    fi
+    magick "$a" -region "$geometry" -fill black -colorize 100% "$tmp_a"
+    magick "$b" -region "$geometry" -fill black -colorize 100% "$tmp_b"
+else
+    cp -- "$a" "$tmp_a"
+    cp -- "$b" "$tmp_b"
+fi
+
+# RMSE, not AE. `-metric AE` is documented as a count of differing pixels, but
+# on ImageMagick 7 it returns values far larger than the image has pixels
+# (5.6e9 against a 733k-pixel frame), so it cannot be compared to anything.
+# RMSE's parenthesised value is normalised to 0..1, which is both meaningful
+# and resolution-independent.
+#
+# `compare` exits non-zero whenever the images differ at all, so it must not be
+# allowed to trip set -e.
+raw=$(magick compare -metric RMSE "$tmp_a" "$tmp_b" "$out" 2>&1 || true)
+
+# "14077.7 (0.214811)" -> 0.214811
+norm=$(printf '%s' "$raw" | sed -n 's/.*(\([0-9.eE+-]*\)).*/\1/p')
+if [ -z "$norm" ]; then
+    echo "kodi-diff: could not parse ImageMagick output: $raw" >&2
+    exit 2
+fi
+
+# awk, not shell arithmetic: these are floats, and large ones arrive in
+# scientific notation. A digit-only test silently reads 4.2e+09 as zero, which
+# reports a changed screen as identical — the exact failure this tool exists
+# to catch.
+pct=$(awk -v n="$norm" 'BEGIN{ printf "%.4f", n * 100 }')
+
+if awk -v n="$norm" -v t="$threshold" 'BEGIN{ exit !(n <= t) }'; then
+    rm -f "$out"
+    echo "identical (${pct}% differing$([ "$mask" -eq 1 ] && echo ', clock masked'))"
+    exit 0
+fi
+
+echo "changed   (${pct}% differing, diff=$out)"
+exit 1

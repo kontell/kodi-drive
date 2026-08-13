@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# kodi-logtail — read kodi.log without reading all of kodi.log.
+#
+# Usage:
+#   kodi-logtail mark            record the current size as a marker
+#   kodi-logtail since           print everything written since the mark
+#   kodi-logtail errors          only ERROR/WARNING/FATAL since the mark
+#   kodi-logtail tail [N]        last N lines (default 50), ignoring the mark
+#   kodi-logtail grep <pattern>  extended-regex search since the mark
+#
+# The mark/since pair is the point of this tool. kodi.log on a busy box is tens
+# of megabytes and mostly irrelevant; reading it whole wastes an agent's context
+# and buries the ten lines that matter. Mark, do the thing, read what appeared.
+#
+#   kodi-logtail mark && kodi-remote reload && sleep 2 && kodi-logtail errors
+#
+# Log location: $KODI_LOG, else the target's KODI_<NAME>_LOG, else the platform
+# default. For Android use `adb shell` — see the kodi-adb skill.
+#
+# WARNING: kodi.log carries credentials. Kodi core and inputstream.adaptive log
+# full stream URLs including api_key= and token= at debug level, and an add-on
+# cannot prevent it. Redact before pasting anywhere.
+#
+# Licence: GPL-2.0-or-later
+
+set -euo pipefail
+
+# shellcheck source=../lib/kodi-target.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/kodi-target.sh"
+kd_load_target
+
+default_log() {
+    case "$(uname -s)" in
+        Darwin) printf '%s/Library/Logs/kodi.log' "$HOME" ;;
+        MINGW*|MSYS*|CYGWIN*) printf '%s/Kodi/kodi.log' "${APPDATA:-$HOME}" ;;
+        *) printf '%s/.kodi/temp/kodi.log' "$HOME" ;;
+    esac
+}
+
+[ -n "${KODI_LOG:-}" ] || KODI_LOG="$(default_log)"
+
+: "${KODI_LOG_MARK:=${TMPDIR:-/tmp}/kodi-logtail.mark}"
+
+if [ ! -f "$KODI_LOG" ]; then
+    cat >&2 <<EOF
+kodi-logtail: no log at $KODI_LOG
+
+Set KODI_LOG, or KODI_<TARGET>_LOG in ~/.config/kodi-drive/targets.env.
+Common locations:
+  Linux     ~/.kodi/temp/kodi.log
+  macOS     ~/Library/Logs/kodi.log
+  Windows   %APPDATA%\\Kodi\\kodi.log
+  Android   /sdcard/Android/data/org.xbmc.kodi/files/.kodi/temp/kodi.log
+            (reach it with adb — see the kodi-adb skill)
+
+If the file exists but is nearly empty, debug logging is off. Turn it on:
+  Settings > System > Logging > "Enable debug logging",
+  or set <loglevel>1</loglevel> in advancedsettings.xml to avoid the
+  on-screen overlay. See the kodi-logs skill.
+EOF
+    exit 1
+fi
+
+size() { stat -c%s "$KODI_LOG" 2>/dev/null || stat -f%z "$KODI_LOG" 2>/dev/null || echo 0; }
+
+start_offset() {
+    local start=0 cur
+    [ -f "$KODI_LOG_MARK" ] && start=$(cat "$KODI_LOG_MARK")
+    cur=$(size)
+    # Kodi rotates kodi.log to kodi.old.log on start, so a smaller file means a
+    # restart happened and the old offset points into different content.
+    if [ "$cur" -lt "$start" ]; then
+        echo "kodi-logtail: log shrank — Kodi restarted, reading from the top" >&2
+        start=0
+    fi
+    printf '%s' "$start"
+}
+
+case "${1:-since}" in
+    mark)
+        size > "$KODI_LOG_MARK"
+        echo "marked at $(cat "$KODI_LOG_MARK") bytes" >&2
+        ;;
+    since)
+        tail -c "+$(( $(start_offset) + 1 ))" "$KODI_LOG"
+        ;;
+    errors)
+        tail -c "+$(( $(start_offset) + 1 ))" "$KODI_LOG" \
+            | grep -E 'ERROR|WARNING|FATAL|SEVERE' || true
+        ;;
+    grep)
+        [ $# -ge 2 ] || { echo "usage: kodi-logtail grep <pattern>" >&2; exit 2; }
+        tail -c "+$(( $(start_offset) + 1 ))" "$KODI_LOG" | grep -E "$2" || true
+        ;;
+    tail)
+        tail -n "${2:-50}" "$KODI_LOG"
+        ;;
+    *)
+        sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//' >&2
+        exit 2
+        ;;
+esac

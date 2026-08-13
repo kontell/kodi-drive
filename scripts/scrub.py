@@ -60,8 +60,13 @@ IPV4 = _re(r"(?<![\w.])((?:\d{1,3}\.){3}\d{1,3})(?![\w.])")
 # `.local` is both a mDNS TLD and a config-file convention, so the hostname rule needs
 # its own allowlist. The trailing lookahead already kills `settings.local.json`; these
 # are the bare-suffix cases that survive it.
-HOSTNAME = _re(r"\b[a-z0-9][a-z0-9-]*\.(local|lan|home|internal|xyz|duckdns\.org|"
-               r"ddns\.net|hopto\.org|no-ip\.(?:com|org)|workers\.dev)\b(?![.\w-])")
+# `.home` is deliberately absent: it collides with `Path.home`, `user.home`, and
+# similar attribute access far more often than it catches a real router domain.
+# The trailing `(?!\s*\()` covers the same class for the remaining suffixes —
+# `foo.internal(...)` is a method call, not a host.
+HOSTNAME = _re(r"\b[a-z0-9][a-z0-9-]*\.(local|lan|internal|xyz|duckdns\.org|"
+               r"ddns\.net|hopto\.org|no-ip\.(?:com|org)|workers\.dev)\b"
+               r"(?![.\w-])(?!\s*\()")
 ALLOWED_HOSTS = _re(
     r"^(settings\.local|scrub-map\.local|claude\.local|mcp\.local|env\.local|"
     r"config\.local|example\.(?:com|org|net)|test\.local)$"

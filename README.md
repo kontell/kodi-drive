@@ -109,6 +109,12 @@ consolation prize.
 - [`kodi-ui-navigation`](skills/kodi-ui-navigation/SKILL.md) — Navigate Kodi's UI blind without firing actions at the wrong control.
 - [`kodi-versions-abi`](skills/kodi-versions-abi/SKILL.md) — Pick a version number and an API level that the Kodi versions you care about will actually accept.
 
+### Adjacent systems
+
+*Not Kodi, but things Kodi add-ons routinely talk to.*
+
+- [`jellyfin-client`](adjacent/jellyfin-client/SKILL.md) — Write a Kodi add-on that talks to a Jellyfin or Emby server without losing sync state or playing the wrong stream.
+
 <!-- END SKILL INDEX -->
 
 Add-on-specific knowledge lives in [`addons/`](addons/); knowledge about non-Kodi systems that Kodi

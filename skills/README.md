@@ -77,6 +77,7 @@ See [`../README.md`](../README.md) for how to install and use these, and
 
 *Skin XML and the coordinate spaces behind it.*
 
+- [`kodi-keymaps`](kodi-keymaps/SKILL.md) — Bind keys and remote buttons in Kodi, and understand why an add-on cannot ship a keymap.
 - [`kodi-skin-res-scaling`](kodi-skin-res-scaling/SKILL.md) — Understand Kodi's skin coordinate spaces and which XML file wins when two share a name.
 - [`kodi-skin-xml`](kodi-skin-xml/SKILL.md) — Edit Kodi skin XML without silent failures.
 

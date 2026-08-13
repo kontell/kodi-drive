@@ -1,6 +1,9 @@
 # kodi-drive — a shared Kodi knowledge repo for coding agents
 
-> Implementation plan. Status: draft, not yet started.
+> Implementation plan. **Status as of 2026-08-13: phases 0–3 and 5 done, 13 skills,
+> 6 helpers, all verified against a live Kodi 21.3. Phase 4 (the harvest), phase 6
+> (deep dive), phase 7 (stripping the source repos) and the `<DEVBOX>` survey remain.**
+>
 > Private strings in this document use the placeholder convention defined below
 > (`<JELLYFIN_HOST>`, `/home/<user>/`, …) because this file ships in the repo.
 
@@ -515,16 +518,16 @@ the transcripts, which are large and where several of the best findings on this 
 
 | Phase | Deliverable |
 |---|---|
-| **0** | Rotate the remaining two credentials; audit `pvr.kofin` history; quarantine the deadlock evidence bundle. |
-| **1** | **Private** repo skeleton: README, CONTRIBUTING, LICENSE, plugin manifests, PR/issue templates, `validate.py`, `scrub.py` (detect + redact), CI. |
-| **1b** | **Survey `<DEVBOX>`** — a session on that machine writes `docs/harvest-devbox.md` into the shared tree. Runs in parallel with Phase 1; must land before 2 and 4. |
-| **2** | Reconcile the two copies of `bin/kodi-*`, then vendor them, parameterised via `targets.env`. Prove the plugin loads from `~/.claude/skills/kodi-drive/`. |
-| **3** | Split the existing 414-line skill into the access & control set. |
-| **4** | Harvest `notes/` → `docs/` → CLAUDE.md → memories → git histories → **`<DEVBOX>` findings**, redacting as you go. |
-| **5** | `kodi-triage`, `kodi-logs`, `kodi-crash-triage`, `kodi-clean-profile`, `kodi-test-rig`. **Flip the repo public here**, once scrubbing is proven on *both* machines' material. |
-| **6** | `kodi-architecture` + `kodi-source-map` (one session). |
-| **7** | Strip the source repos; install the pointer stanza; consolidate memories **from both machines** into one slug per project. |
-| **8** | `/kodi-drive:contribute` + `/kodi-drive:audit`; announce. File the three remaining upstream defects. |
+| **0** | ✅ Global gitignore hardened; pvr.kofin history audited (key was public in f2d1e98 since 2026-03-29, now rotated). Outstanding: Audiobookshelf JWT, test-user password. |
+| **1** | ✅ Repo skeleton, validate.py, scrub.py, CI, templates, plugin manifests. |
+| **1b** | ⬜ **Survey `<DEVBOX>`** — a session on that machine writes `docs/harvest-devbox.md` into the shared tree. |
+| **2** | ✅ Five helpers vendored + kodi-discover added, all live-verified. Reconciliation against `<DEVBOX>` copies still pending. |
+| **3** | ✅ Split into kodi-connect, kodi-jsonrpc, kodi-builtins (folded into kodi-remote), kodi-adb, kodi-ui-navigation, kodi-screenshot-review, kodi-addon-driving. |
+| **4** | ⬜ Harvest `notes/` → `docs/` → CLAUDE.md → memories → git histories, redacting as you go. |
+| **5** | ✅ kodi-triage, kodi-logs, kodi-clean-profile, kodi-test-rig, kodi-process-control, kodi-profiles, kodi-library-data. Repo still **private** — flip after phase 4 scrubbing. |
+| **6** | ⬜ kodi-architecture + kodi-source-map (one session). |
+| **7** | ⬜ Strip the source repos; install the pointer stanza; consolidate memories from both machines. |
+| **8** | ⬜ /kodi-drive:contribute + /kodi-drive:audit; announce. File the three remaining upstream defects. |
 
 ## Verification
 

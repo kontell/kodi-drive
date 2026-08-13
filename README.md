@@ -81,20 +81,25 @@ consolation prize.
 - [`kodi-android-ndk`](skills/kodi-android-ndk/SKILL.md) — Cross-compile a Kodi binary add-on and its dependencies for Android.
 - [`kodi-announcements`](skills/kodi-announcements/SKILL.md) — React correctly to Kodi's notifications — Player.OnStop, Playlist.OnClear, OnAdd and friends — over JSON-RPC or in an add-on's onNotification.
 - [`kodi-binary-build`](skills/kodi-binary-build/SKILL.md) — Build a Kodi binary add-on that installs on the Kodi versions you meant, on the systems your users have.
+- [`kodi-binary-settings`](skills/kodi-binary-settings/SKILL.md) — Build a settings UI for a binary Kodi add-on, including action buttons the API does not support.
 - [`kodi-clean-profile`](skills/kodi-clean-profile/SKILL.md) — Isolate a Kodi problem by reproducing it in a clean profile with no add-ons, then bisect to find the culprit.
 - [`kodi-connect`](skills/kodi-connect/SKILL.md) — Find a Kodi on the network and get control of it — JSON-RPC, EventServer, ADB, or SSH — and store its address and credentials safely.
 - [`kodi-contributing`](skills/kodi-contributing/SKILL.md) — Get a change accepted into Kodi itself, or an add-on into the official repository.
 - [`kodi-database-writing`](skills/kodi-database-writing/SKILL.md) — Write to Kodi's own library databases without corrupting them or wedging Kodi.
 - [`kodi-freeze-diagnosis`](skills/kodi-freeze-diagnosis/SKILL.md) — Work out why Kodi froze, hung, or stopped responding — including getting native backtraces off an unrooted Android TV box.
+- [`kodi-idle-screensaver`](skills/kodi-idle-screensaver/SKILL.md) — Detect idleness and control the screen from a Kodi add-on — dim it, blank it, or turn the display off — without stranding the user's settings.
+- [`kodi-inputstream`](skills/kodi-inputstream/SKILL.md) — Choose between inputstream.adaptive and inputstream.ffmpegdirect, and get seeking and timing right.
 - [`kodi-jsonrpc`](skills/kodi-jsonrpc/SKILL.md) — Use Kodi's JSON-RPC API as ground truth instead of guessing from screenshots.
 - [`kodi-known-defects`](skills/kodi-known-defects/SKILL.md) — Kodi and inputstream.adaptive defects confirmed by investigation, with their symptoms, upstream status, and how to recognise each from a log.
 - [`kodi-library-data`](skills/kodi-library-data/SKILL.md) — Kodi's own SQLite databases — where they live, which are per-profile, how to read one safely, and which user-facing operations destroy add-on data.
 - [`kodi-logs`](skills/kodi-logs/SKILL.md) — Read kodi.log usefully — turn on debug logging without the on-screen overlay, find the log on any platform, grep for the right severity, and read a crashlog.
 - [`kodi-orientation`](skills/kodi-orientation/SKILL.md) — Start here for any Kodi work.
 - [`kodi-performance`](skills/kodi-performance/SKILL.md) — Make a Kodi add-on fast on the hardware people actually run it on.
+- [`kodi-playback-resume`](skills/kodi-playback-resume/SKILL.md) — Hand Kodi an item so the right player opens it, in the right window, at the right position.
 - [`kodi-plugin-handles`](skills/kodi-plugin-handles/SKILL.md) — Close your plugin handle, or hang the caller forever.
 - [`kodi-process-control`](skills/kodi-process-control/SKILL.md) — Stop, restart, and measure a Kodi process without killing your own shell or measuring the wrong one.
 - [`kodi-profiles`](skills/kodi-profiles/SKILL.md) — Switch Kodi profiles from a script, and enable add-ons in the profile you actually meant.
+- [`kodi-pvr-addon`](skills/kodi-pvr-addon/SKILL.md) — Write a Kodi PVR client that plays, records and reports correctly.
 - [`kodi-screenshot-review`](skills/kodi-screenshot-review/SKILL.md) — Take a Kodi screenshot and actually read it, rather than filing it next to a claim of success.
 - [`kodi-skin-res-scaling`](skills/kodi-skin-res-scaling/SKILL.md) — Understand Kodi's skin coordinate spaces and which XML file wins when two share a name.
 - [`kodi-skin-xml`](skills/kodi-skin-xml/SKILL.md) — Edit Kodi skin XML without silent failures.

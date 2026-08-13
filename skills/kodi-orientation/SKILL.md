@@ -89,6 +89,11 @@ prevent.
 [`kodi-process-control`](../kodi-process-control/SKILL.md) ·
 [`kodi-profiles`](../kodi-profiles/SKILL.md)
 
+**Playback and streams**
+[`kodi-playback-resume`](../kodi-playback-resume/SKILL.md) ·
+[`kodi-inputstream`](../kodi-inputstream/SKILL.md) ·
+[`kodi-pvr-addon`](../kodi-pvr-addon/SKILL.md)
+
 **Writing an add-on**
 [`kodi-addon-manifest`](../kodi-addon-manifest/SKILL.md) ·
 [`kodi-plugin-handles`](../kodi-plugin-handles/SKILL.md) ·
@@ -108,7 +113,8 @@ prevent.
 
 **Binary add-ons**
 [`kodi-binary-build`](../kodi-binary-build/SKILL.md) ·
-[`kodi-android-ndk`](../kodi-android-ndk/SKILL.md)
+[`kodi-android-ndk`](../kodi-android-ndk/SKILL.md) ·
+[`kodi-binary-settings`](../kodi-binary-settings/SKILL.md)
 
 **Shipping it**
 [`kodi-versions-abi`](../kodi-versions-abi/SKILL.md) ·

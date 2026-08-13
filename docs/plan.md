@@ -481,11 +481,32 @@ slugs, so the plan also consolidates each add-on's memories into its current slu
 
 ---
 
-## Second machine
+## Second machine — surveyed 2026-08-13, `docs/harvest-devbox.md`
 
-Much of `pvr.kofin` and some other add-on work was done on a second box (`<DEVBOX>`). **The dev tree here is
-an NFS mount of that machine**, so the *repo* content is already shared — but everything machine-local to it
-is invisible from this side and has never been surveyed:
+**Correction to this section's premise.** It assumed the dev and reference trees were machine-local to the
+server. They are not — they *are* the exported tree, so both machines have been reading the same files all
+along. The `CLAUDE.md` / `.claude/` sweep therefore found shared material, already harvested. What was
+genuinely local, and never seen, was `~/.claude/` and `/opt/`.
+
+**The Phase 2 blocker is closed.** `~/bin` does not exist on that machine, and no `kodi-*` helper is
+anywhere on it. There were never two copies to reconcile — the vendored five can only have come from here.
+
+**Findings that changed the picture:**
+
+- **72 memory files, 55 memories, in 17 project directories — never harvested.** The real find, and the
+  main outstanding Phase 4 item. Highest value: 9 pvr.kofin memories covering ISA live-TV codecs,
+  in-progress-recording HLS semantics, and menu-hook feasibility.
+- **A wrong claim in `kodi-pvr-addon`**, caught and source-traced. Fixed, along with a second one in the
+  same skill. See the commit for 2026-08-13.
+- **No Kodi is installed on that machine** — it is a headless build server. Every live verification
+  recorded there was done against other devices, so nothing from it is `observed` tier.
+- **`/media/` is NFS-exported `rw` to `*`** — every host, write access, no restriction. That widens the
+  blast radius of the logs and the bugreport below considerably.
+- Sharper detail on the key exposure: added `47d23c1` on 2026-03-28, untracked at `69ae5c7` on 2026-05-15,
+  and **confirmed still retrievable today at 8 reachable commits**. Rotation (done) is what closed it;
+  removal at HEAD did not.
+
+The original list of what to look for, retained for reference:
 
 - `~/.claude/projects/*/memory/` — its own memory notes, under **its own path slugs**. If the tree is
   mounted at a different path there, the slugs differ, which adds a fifth axis to the fragmentation already
@@ -526,8 +547,8 @@ the transcripts, which are large and where several of the best findings on this 
 |---|---|
 | **0** | ✅ Global gitignore hardened; pvr.kofin history audited (key was public in f2d1e98 since 2026-03-29, now rotated). Outstanding: Audiobookshelf JWT, test-user password. |
 | **1** | ✅ Repo skeleton, validate.py, scrub.py, CI, templates, plugin manifests. |
-| **1b** | ⬜ **Survey `<DEVBOX>`** — a session on that machine writes `docs/harvest-devbox.md` into the shared tree. |
-| **2** | ✅ Five helpers vendored + kodi-discover added, all live-verified. Reconciliation against `<DEVBOX>` copies still pending. |
+| **1b** | ✅ **Done** — `docs/harvest-devbox.md`. Overturned the machine-local premise, closed the phase 2 blocker, and caught two wrong claims in `kodi-pvr-addon`. |
+| **2** | ✅ Five helpers vendored + kodi-discover added, all live-verified. Reconciliation closed — `<DEVBOX>` never had them. |
 | **3** | ✅ Split into kodi-connect, kodi-jsonrpc, kodi-builtins (folded into kodi-remote), kodi-adb, kodi-ui-navigation, kodi-screenshot-review, kodi-addon-driving. |
 | **4** | 🔶 **Mostly done for generic knowledge.** 30 skills cover the freeze/perf/announcement investigations, the full Python and binary add-on surfaces, skinning, databases, artwork, release and upstream contribution. Remaining: 6 Jellyfin-specific notes → `adjacent/`, 33 kofin docs and 7 CLAUDE.md files (mostly add-on-specific → `addons/`), 90 memory notes (largely already superseded by the skills above — audit rather than harvest). |
 | **5** | ✅ kodi-triage, kodi-logs, kodi-clean-profile, kodi-test-rig, kodi-process-control, kodi-profiles, kodi-library-data. Repo still **private** — flip after phase 4 scrubbing. |

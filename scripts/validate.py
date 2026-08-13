@@ -284,6 +284,16 @@ def check_skill(path: Path, f: Findings) -> None:
                     f"hedging language {m.group(0)!r} — if you are not sure, this is an "
                     "issue, not a skill. Or move it under '## Open questions'.")
 
+    # Relative links between skills. A skill pointing at one that was renamed or
+    # never written sends a reader somewhere that does not exist, and nothing
+    # else in the toolchain would notice.
+    for i, line in enumerate(body_lines):
+        for m in re.finditer(r"\]\((\.\.?/[^)#]+)", line):
+            target = (path.parent / m.group(1)).resolve()
+            if not target.exists():
+                f.error(path, body_start + 1 + i,
+                        f"link target does not exist: {m.group(1)}")
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,

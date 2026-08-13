@@ -91,6 +91,8 @@ prevent.
 
 **Playback and streams**
 [`kodi-playback-resume`](../kodi-playback-resume/SKILL.md) ·
+[`kodi-paplayer`](../kodi-paplayer/SKILL.md) ·
+[`kodi-playback-tempo`](../kodi-playback-tempo/SKILL.md) ·
 [`kodi-inputstream`](../kodi-inputstream/SKILL.md) ·
 [`kodi-pvr-addon`](../kodi-pvr-addon/SKILL.md) ·
 [`kodi-pvr-menu-hooks`](../kodi-pvr-menu-hooks/SKILL.md)

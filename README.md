@@ -94,8 +94,10 @@ consolation prize.
 - [`kodi-library-data`](skills/kodi-library-data/SKILL.md) — Kodi's own SQLite databases — where they live, which are per-profile, how to read one safely, and which user-facing operations destroy add-on data.
 - [`kodi-logs`](skills/kodi-logs/SKILL.md) — Read kodi.log usefully — turn on debug logging without the on-screen overlay, find the log on any platform, grep for the right severity, and read a crashlog.
 - [`kodi-orientation`](skills/kodi-orientation/SKILL.md) — Start here for any Kodi work.
+- [`kodi-paplayer`](skills/kodi-paplayer/SKILL.md) — Control Kodi's audio player (PAPlayer) safely, especially while it is paused.
 - [`kodi-performance`](skills/kodi-performance/SKILL.md) — Make a Kodi add-on fast on the hardware people actually run it on.
 - [`kodi-playback-resume`](skills/kodi-playback-resume/SKILL.md) — Hand Kodi an item so the right player opens it, in the right window, at the right position.
+- [`kodi-playback-tempo`](skills/kodi-playback-tempo/SKILL.md) — Change playback rate with pitch correction, and find out why it silently does nothing.
 - [`kodi-plugin-handles`](skills/kodi-plugin-handles/SKILL.md) — Close your plugin handle, or hang the caller forever.
 - [`kodi-process-control`](skills/kodi-process-control/SKILL.md) — Stop, restart, and measure a Kodi process without killing your own shell or measuring the wrong one.
 - [`kodi-profiles`](skills/kodi-profiles/SKILL.md) — Switch Kodi profiles from a script, and enable add-ons in the profile you actually meant.

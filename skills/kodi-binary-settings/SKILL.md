@@ -79,13 +79,29 @@ xbmcaddon.Addon().setSetting(sys.argv[1], 'trigger')
 your C++ `SetSetting()` callback fires, the modal is gone and your own dialogs are
 free to open.
 
-**Use a sentinel value, not a boolean.** Firing only when the value is
-`"trigger"` distinguishes a real button press from ordinary settings-save noise,
-which otherwise re-runs your action every time the user touches anything. Clear
-it immediately after handling.
+**Use a sentinel value, not a boolean.** The reason is specific and worth knowing:
+**Kodi calls `SetSetting` for _every_ setting when the dialog closes, not only the
+ones that changed.** So without a value check, *every* action button fires at
+once, every time the user closes settings — including the ones they did not touch.
+
+Firing only on `"trigger"`, and clearing it immediately after handling, is what
+makes the button a button. Clearing also prevents a re-fire the next time settings
+opens.
+
+**Do not override both `SetSetting` and `SetInstanceSetting*`.** The add-on-level
+`SetSetting` already forwards to instances, so implementing both doubles every
+callback — and a doubled action button runs your action twice.
 
 This is a deliberate workaround for a real API gap, not a hack to be modernised
 away. It is worth a comment in the code saying so, because it looks removable.
+
+### What does not work, so you can stop trying
+
+- **`RunPlugin` and `RunAddon` do nothing** — a PVR add-on is not a plugin.
+- **`action=""`** does nothing.
+- **`action="SetSetting(...)"`** is not a valid Kodi builtin.
+
+`RunScript` is the one that works, because a script *is* something Kodi can run.
 
 ## The same gap bites playback reporting
 

@@ -82,6 +82,35 @@ And re-read once, not per event: a ten-track album fires **ten separate `OnAdd`
 notifications within about 10 ms**. Debounce around 250 ms or you will do the
 same work ten times.
 
+## Blocking in `onPlayBackStarted` delays `onAVStarted`
+
+Player callbacks are delivered on Kodi's player-callback thread. **Blocking
+inside one blocks the delivery of the next.**
+
+Measured: an add-on polling a file with 2-second granularity inside
+`onPlayBackStarted` delayed `onAVStarted` by about **2.1 seconds**. Everything
+downstream of `onAVStarted` was late by the same amount, and none of it looked
+like the cause.
+
+If you need to act at playback start, act in the **first line** of the handler and
+defer the rest.
+
+## Identify the item from the notification, not from your own pipeline
+
+Resolving an item from `Player.OnPlay` via its Kodi id and a database lookup takes
+**milliseconds**. Going through an add-on's own played-info pipeline took
+**seconds** for the same answer.
+
+That difference decides whether you can act within a boundary window at all. Take
+the id from the payload.
+
+## There is no pre-boundary hook
+
+`onPlayBackEnded` does **not** fire on a gapless playlist advance. There is no
+event before a track ends, so anything boundary-related is necessarily reactive
+and at least one callback delivery late. See
+[`kodi-paplayer`](../kodi-paplayer/SKILL.md).
+
 ## Handlers run on a thread every add-on shares
 
 Kodi delivers player and monitor callbacks on **the announcement thread that

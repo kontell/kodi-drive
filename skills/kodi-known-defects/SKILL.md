@@ -121,6 +121,34 @@ clamp.
 
 ---
 
+## `CDVDDemuxClient` never reports a stream length, so PAPlayer cannot seek
+
+**Status: `unreported`** — a fix exists as a draft branch, not yet a filed PR.
+**Affects:** Kodi 21. **Severity:** seeking is impossible for anything played
+through an inputstream add-on under PAPlayer.
+
+`CDVDDemux` declares the default (`xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemux.h:301`):
+
+```cpp
+virtual int GetStreamLength() { return 0; }
+```
+
+`CDVDDemuxFFmpeg`, `CDVDDemuxBXA`, `CDVDDemuxCDDA` and `CDemuxMultiSource` all
+override it. **`CDVDDemuxClient` — the demuxer used for inputstream add-ons —
+does not**, verified: zero occurrences of `GetStreamLength` in either
+`DVDDemuxClient.h` or `DVDDemuxClient.cpp`.
+
+So it inherits `return 0`, PAPlayer clamps every seek to 0, and the OSD position
+reads 0 throughout. The symptom looks like a broken inputstream add-on, and is
+not.
+
+The reported fix is small — two files, about 16 lines. Note the interaction with
+[`kodi-inputstream`](../kodi-inputstream/SKILL.md): missing
+`INPUTSTREAM_SUPPORTS_IDISPLAYTIME` produces the *same* symptom from the add-on
+side, so rule that out before concluding it is this.
+
+---
+
 ## PVR timer-type pre-selection ignores every usability flag
 
 **Status: `unreported`.**

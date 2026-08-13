@@ -1,0 +1,265 @@
+#!/usr/bin/env bash
+# kodi-discover — find Kodi instances on this network.
+#
+# Usage:
+#   kodi-discover [--json] [--no-scan] [--subnet 192.0.2.0/24] [--timeout N]
+#
+# Run this BEFORE asking a user for an address. Arriving with "I found Kodi
+# 21.3 at 192.0.2.10, is that the one?" is a far better question than "what is
+# your Kodi's IP address?", which most users cannot answer.
+#
+# Four methods, cheapest first:
+#
+#   1. mDNS/Zeroconf   Kodi advertises _xbmc-jsonrpc-h._tcp (HTTP) and
+#                      _xbmc-jsonrpc._tcp (raw TCP) when its web server is on.
+#                      Instant and exact, but only if Zeroconf is enabled in
+#                      Kodi AND avahi/dns-sd is present here.
+#   2. ADB             Already-connected Android devices, plus Android 11+
+#                      wireless-debugging endpoints advertised over mDNS.
+#   3. SSDP/UPnP       Kodi answers M-SEARCH when its UPnP renderer is on.
+#                      Finds Kodi boxes whose JSON-RPC is off — useful, because
+#                      that is a thing you can then tell the user to turn on.
+#   4. Port sweep      Probe :8080/jsonrpc across the local /24. The fallback
+#                      when every discovery service is disabled, which is the
+#                      default state of a fresh Kodi install.
+#
+# Every candidate is confirmed with JSONRPC.Ping and identified with
+# Application.GetProperties, so a hit is a real Kodi and not just an open port.
+#
+# Licence: GPL-2.0-or-later
+
+set -uo pipefail
+
+json=0
+scan=1
+subnet=""
+timeout="${KODI_DISCOVER_TIMEOUT:-2}"
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --json)     json=1; shift ;;
+        --no-scan)  scan=0; shift ;;
+        --subnet)   subnet="$2"; shift 2 ;;
+        --timeout)  timeout="$2"; shift 2 ;;
+        -h|--help)  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "kodi-discover: unknown argument '$1'" >&2; exit 2 ;;
+    esac
+done
+
+note() { [ "$json" -eq 1 ] || echo "$@" >&2; }
+
+# host port -> "host port version name" on success, nothing on failure.
+# Tries unauthenticated first: Kodi allows JSONRPC.Ping without credentials in
+# some configurations, and we would rather report "found, needs auth" than miss it.
+probe() {
+    local host="$1" port="$2" body
+    for auth in "" "-u kodi:kodi"; do
+        # shellcheck disable=SC2086
+        body=$(curl -fsS --max-time "$timeout" $auth \
+                -H 'Content-Type: application/json' \
+                -d '{"jsonrpc":"2.0","method":"Application.GetProperties","params":{"properties":["version","name"]},"id":1}' \
+                "http://$host:$port/jsonrpc" 2>/dev/null) || continue
+        printf '%s' "$body" | python3 -c '
+import json, sys
+try:
+    r = json.load(sys.stdin).get("result") or {}
+    v = r.get("version") or {}
+    ver = ".".join(str(v[k]) for k in ("major", "minor") if k in v)
+    if v.get("tag") and v["tag"] != "stable":
+        ver += "-" + v["tag"]
+    print(ver or "?", (r.get("name") or "Kodi").replace(" ", "_"))
+except Exception:
+    sys.exit(1)
+' 2>/dev/null && return 0
+    done
+    return 1
+}
+
+# An explicit counter, because `${#FOUND[@]}` on an empty associative array
+# trips `set -u` with "unbound variable" — and it only shows up on the code
+# path where the array IS empty, which is exactly the path that matters here.
+declare -A FOUND=()   # "host:port" -> "method version name"
+found_count=0
+
+record() {
+    FOUND["$1:$2"]="$3 $4 $5"
+    found_count=$((found_count + 1))
+}
+
+# --- 1. mDNS -------------------------------------------------------------
+discover_mdns() {
+    local out=""
+    if command -v avahi-browse >/dev/null 2>&1; then
+        # -p parseable, -r resolve, -t terminate after cache is exhausted
+        out=$(timeout "$((timeout * 3))" avahi-browse -prt _xbmc-jsonrpc-h._tcp 2>/dev/null; \
+              timeout "$((timeout * 3))" avahi-browse -prt _xbmc-jsonrpc._tcp 2>/dev/null)
+    elif command -v dns-sd >/dev/null 2>&1; then
+        note "  dns-sd present but non-interactive browsing is unreliable; skipping"
+        return
+    else
+        note "  (no avahi-browse or dns-sd — install avahi-utils for instant discovery)"
+        return
+    fi
+    [ -n "$out" ] || { note "  no mDNS responses"; return; }
+    # Resolved lines: =;iface;proto;name;type;domain;hostname;address;port;txt
+    printf '%s\n' "$out" | awk -F';' '/^=/ { print $8, $9 }' | sort -u | while read -r addr port; do
+        [ -n "$addr" ] || continue
+        echo "$addr ${port:-8080}"
+    done
+}
+
+# --- 2. ADB --------------------------------------------------------------
+discover_adb() {
+    command -v adb >/dev/null 2>&1 || { note "  (adb not installed)"; return; }
+    adb devices 2>/dev/null | awk 'NR>1 && $2=="device" { print $1 }' | while read -r serial; do
+        case "$serial" in
+            *:*) echo "${serial%%:*} 8080" ;;   # network device — try JSON-RPC too
+            *)   note "  adb: USB device $serial (use the kodi-adb skill)" ;;
+        esac
+    done
+}
+
+# --- 3. SSDP -------------------------------------------------------------
+discover_ssdp() {
+    python3 - "$timeout" <<'PY' 2>/dev/null
+import socket, sys, re
+timeout = float(sys.argv[1])
+msg = ("M-SEARCH * HTTP/1.1\r\n"
+       "HOST: 239.255.255.250:1900\r\n"
+       'MAN: "ssdp:discover"\r\n'
+       "MX: 1\r\n"
+       "ST: upnp:rootdevice\r\n\r\n").encode()
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.settimeout(timeout)
+try:
+    s.sendto(msg, ("239.255.255.250", 1900))
+except OSError:
+    sys.exit(0)
+seen = set()
+while True:
+    try:
+        data, addr = s.recvfrom(4096)
+    except (socket.timeout, OSError):
+        break
+    text = data.decode("utf-8", "replace")
+    # Only report hosts whose SSDP response looks like Kodi.
+    if not re.search(r"kodi|xbmc", text, re.I):
+        continue
+    if addr[0] in seen:
+        continue
+    seen.add(addr[0])
+    print(addr[0], 8080)
+PY
+}
+
+# --- 4. Port sweep -------------------------------------------------------
+local_subnet() {
+    if [ -n "$subnet" ]; then printf '%s' "$subnet"; return; fi
+    # First non-loopback IPv4 with a prefix, reduced to its /24.
+    ip -4 -o addr show scope global 2>/dev/null \
+        | awk '{print $4}' | head -n1 \
+        | awk -F'[./]' '{ printf "%s.%s.%s.0/24", $1, $2, $3 }'
+}
+
+discover_sweep() {
+    local cidr base
+    cidr="$(local_subnet)"
+    [ -n "$cidr" ] || { note "  could not determine a local subnet"; return; }
+    base="${cidr%.*}"
+    note "  sweeping ${base}.1-254 on port 8080 (this takes a few seconds)"
+    # Accept 401 as a hit, not just 200. A password-protected Kodi — the
+    # configuration Kodi itself recommends — answers an unauthenticated probe
+    # with 401, and `curl -f` discards that as a failure. Filtering on -f here
+    # silently misses exactly the instances most worth finding.
+    seq 1 254 | xargs -P 64 -I{} sh -c \
+        'code=$(curl -sS --max-time 1 -o /dev/null -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            -d "{\"jsonrpc\":\"2.0\",\"method\":\"JSONRPC.Ping\",\"id\":1}" \
+            "http://'"$base"'.{}:8080/jsonrpc" 2>/dev/null)
+         case "$code" in 200|401) echo "'"$base"'.{} 8080" ;; esac' \
+        2>/dev/null
+}
+
+note "Looking for Kodi..."
+note "mDNS:"
+while read -r h p; do [ -n "${h:-}" ] && record "$h" "$p" mdns "" ""; done < <(discover_mdns)
+note "ADB:"
+while read -r h p; do [ -n "${h:-}" ] && record "$h" "$p" adb "" ""; done < <(discover_adb)
+note "SSDP:"
+while read -r h p; do [ -n "${h:-}" ] && record "$h" "$p" ssdp "" ""; done < <(discover_ssdp)
+if [ "$scan" -eq 1 ] && [ "$found_count" -eq 0 ]; then
+    note "Nothing advertised — falling back to a port sweep."
+    while read -r h p; do [ -n "${h:-}" ] && record "$h" "$p" sweep "" ""; done < <(discover_sweep)
+fi
+
+# Always check localhost: the most common case, and it advertises nothing.
+if probe 127.0.0.1 8080 >/dev/null 2>&1; then record 127.0.0.1 8080 local "" ""; fi
+
+if [ "$found_count" -eq 0 ]; then
+    if [ "$json" -eq 1 ]; then echo "[]"; else
+        cat >&2 <<'EOF'
+
+No Kodi found.
+
+That usually means the API is off rather than that Kodi is absent — it ships
+off by default. Ask the user to turn it on:
+
+  Settings > Services > Control
+    "Allow remote control via HTTP"                     -> ON   (port 8080)
+    "Allow programs on other systems to control Kodi"   -> ON   (for builtins)
+  Settings > Services > General
+    "Announce services to other systems"                -> ON   (for mDNS)
+
+On Android TV the same settings exist; navigate with the D-pad, or over ADB.
+If the box is on another subnet, pass --subnet 192.0.2.0/24.
+EOF
+    fi
+    exit 1
+fi
+
+# Confirm and identify every candidate before reporting it.
+results=()
+
+for key in "${!FOUND[@]}"; do
+    host="${key%:*}"; port="${key##*:}"
+    read -r method _ _ <<<"${FOUND[$key]}"
+    if info=$(probe "$host" "$port"); then
+        read -r version name <<<"$info"
+        results+=("$host|$port|$version|$name|$method|ok")
+    else
+        results+=("$host|$port|?|?|$method|unreachable")
+    fi
+done
+
+if [ "$json" -eq 1 ]; then
+    printf '%s\n' "${results[@]}" | python3 -c '
+import json, sys
+out = []
+for line in sys.stdin.read().splitlines():
+    if not line.strip():
+        continue
+    host, port, version, name, method, status = line.split("|")
+    out.append({"host": host, "port": int(port), "version": version,
+                "name": name, "method": method, "status": status})
+print(json.dumps(sorted(out, key=lambda d: d["host"]), indent=2))
+'
+else
+    echo
+    printf '%-16s %-6s %-10s %-14s %-7s %s\n' HOST PORT VERSION NAME VIA STATUS
+    printf '%s\n' "${results[@]}" | sort | awk -F'|' \
+        '{ printf "%-16s %-6s %-10s %-14s %-7s %s\n", $1, $2, $3, $4, $5, $6 }'
+    cat <<'EOF'
+
+To use one, add it to ~/.config/kodi-drive/targets.env:
+
+  KODI_TARGET_DEFAULT=mykodi
+  KODI_MYKODI_HOST=<host from above>
+  KODI_MYKODI_PORT=<port>
+  KODI_MYKODI_USER=kodi
+  KODI_MYKODI_PASS=<password, if authentication is on>
+
+An "unreachable" row answered discovery but refused JSON-RPC — usually
+"Allow remote control via HTTP" is off, or it needs credentials.
+EOF
+fi

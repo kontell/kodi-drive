@@ -68,7 +68,13 @@ consolation prize.
 ## Skill index
 
 <!-- BEGIN SKILL INDEX -->
-*Populated as skills land. Run `scripts/build-index.py` to regenerate.*
+
+### Skills
+
+*General Kodi knowledge — true across add-ons and installs.*
+
+- [`kodi-connect`](skills/kodi-connect/SKILL.md) — Find a Kodi on the network and get control of it — JSON-RPC, EventServer, ADB, or SSH — and store its address and credentials safely.
+
 <!-- END SKILL INDEX -->
 
 Add-on-specific knowledge lives in [`addons/`](addons/); knowledge about non-Kodi systems that Kodi
@@ -102,34 +108,35 @@ intended. Answering takes a minute; the alternative is a confident wrong answer.
 
 Never in a repo. Never in a `CLAUDE.md`. Never echoed into a terminal.
 
-Create `~/.config/kodi-drive/targets.env` with mode `0600`:
-
-```sh
-# The target used when none is named.
-KODI_TARGET_DEFAULT=devbox
-
-# A local or networked Kodi reachable over JSON-RPC.
-KODI_devbox_TRANSPORT=http
-KODI_devbox_RPC=http://127.0.0.1:8080/jsonrpc
-KODI_devbox_USER=kodi
-KODI_devbox_PASS=changeme
-
-# An Android device over ADB.
-KODI_tv_TRANSPORT=adb
-KODI_tv_ADDR=10.0.0.50:5555
-
-# A remote host over SSH.
-KODI_pi_TRANSPORT=ssh
-KODI_pi_ADDR=pi@10.0.0.60
-```
+Start from the annotated template:
 
 ```sh
 mkdir -p ~/.config/kodi-drive && chmod 700 ~/.config/kodi-drive
-touch ~/.config/kodi-drive/targets.env && chmod 600 ~/.config/kodi-drive/targets.env
+cp targets.env.example ~/.config/kodi-drive/targets.env
+chmod 600 ~/.config/kodi-drive/targets.env
 ```
 
+Variables are `KODI_<TARGET>_<KEY>`, with the target name upper-cased and hyphens turned into
+underscores — target `living-room` becomes `KODI_LIVING_ROOM_*`:
+
+```sh
+KODI_TARGET_DEFAULT=devbox
+
+KODI_DEVBOX_HOST=127.0.0.1
+KODI_DEVBOX_PORT=8080
+KODI_DEVBOX_USER=kodi
+KODI_DEVBOX_PASS=changeme
+
+KODI_TV_TRANSPORT=adb
+KODI_TV_ADDR=192.0.2.10:5555
+KODI_TV_HOST=192.0.2.10
+```
+
+Select one per command with `KODI_TARGET=tv kodi-remote home`.
+
 The helpers in [`bin/`](bin/) read this file. Skills refer only to `$KODI_TARGET` and never to a literal
-host, so nothing in this repo needs to know your network.
+host, so nothing in this repo needs to know your network. You do not have to find the values yourself —
+run [`kodi-discover`](skills/kodi-connect/SKILL.md) and it will report what is on your network.
 
 Server credentials for things Kodi talks to — Jellyfin, Emby, Audiobookshelf, an IPTV provider — go in the
 same file with the same rules.

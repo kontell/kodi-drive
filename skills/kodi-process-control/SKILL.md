@@ -72,6 +72,45 @@ binary=$(pgrep -x kodi.bin  || true)
 Prefer a clean shutdown where you can — `kodi-remote get Application.Quit` — and
 fall back to signals only when Kodi is wedged.
 
+## Restarting cleanly, and what a restart resets that a bounce does not
+
+Kodi respawns itself — no relaunch command needed, because the wrapper above is
+what catches the exit:
+
+```sh
+kodi-builtin 'RestartApp()'   # Kodi exits 65; the wrapper loops and relaunches
+```
+
+**Wait for it properly. JSON-RPC answers early**, before the skin and add-on
+services are up, so a ping that succeeds does not mean the box is ready:
+
+```sh
+for i in $(seq 1 30); do
+  kodi-remote get JSONRPC.Ping >/dev/null 2>&1 && break
+  sleep 2
+done
+sleep 10   # let the skin and add-on services finish starting
+```
+
+A new `pgrep -x kodi.bin` pid confirms the restart actually happened.
+
+**An add-on bounce is not a restart.** Disabling and re-enabling an add-on
+restarts its *service*, but Kodi caches each add-on's **language strings**
+(`resources/language/**/strings.po`) for the whole process lifetime. Newly added
+`30xxx` string ids therefore render **blank** until a full restart. Anything else
+loaded once at Kodi startup — skin PO files, some settings-schema changes — is in
+the same category.
+
+When a new string shows empty despite a correct `strings.po`, that is the cache,
+not a bug in your file.
+
+Restarts are heavier than a bounce and reset playback and navigation state, so
+reach for one only when a bounce genuinely will not do. On a box with multiple
+profiles, a restart can also land on the profile chooser or the default profile
+rather than the one you were on — check `Profiles.GetCurrentProfile` afterwards
+and switch back if needed. See [`kodi-profiles`](../kodi-profiles/SKILL.md),
+because that switch has its own failure modes.
+
 ## Sampling the wrong process reads ~1 MB
 
 `pgrep -f kodi.bin` matches the wrapper and any shell, so a memory sample taken

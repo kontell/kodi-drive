@@ -47,12 +47,17 @@ def _re(p: str) -> re.Pattern:
     return re.compile(p, re.IGNORECASE)
 
 
-# Addresses documentation is allowed to use: loopback, RFC 5737 doc ranges,
-# RFC 3849 IPv6 doc range, and the unspecified address.
+# Addresses documentation is allowed to use:
+#   127.x, 0.0.0.0        loopback and unspecified
+#   192.0.2.x etc         RFC 5737 documentation ranges
+#   239.255.255.250       the SSDP multicast group, named in kodi-discover
+#   10.255.255.1          the conventional blackhole address, used deliberately
+#                         to simulate an unreachable server with a clean timeout
+#                         rather than an instant refusal
 ALLOWED_IPS = _re(
     r"^(127\.\d+\.\d+\.\d+|0\.0\.0\.0|255\.255\.255\.\d+"
     r"|192\.0\.2\.\d+|198\.51\.100\.\d+|203\.0\.113\.\d+"
-    r"|10\.0\.0\.(50|60)|239\.255\.255\.250)$"
+    r"|10\.0\.0\.(50|60)|10\.255\.255\.(1|255)|239\.255\.255\.250)$"
 )
 # Version strings, durations, and semver look like dotted quads to a naive regex.
 IPV4 = _re(r"(?<![\w.])((?:\d{1,3}\.){3}\d{1,3})(?![\w.])")

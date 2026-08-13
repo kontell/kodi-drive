@@ -3,7 +3,8 @@
 
 Enforces the contribution bar mechanically, because prose alone does not hold:
 
-  * frontmatter schema, including a `metadata.verified` block naming real versions
+  * frontmatter schema, including the flat `metadata.verified-*` keys the
+    Agent Skills spec requires (string values only) and a valid category
   * no hedging language outside an `## Open questions` section
   * skills stay small enough that loading one is cheap
 
@@ -30,7 +31,7 @@ STALE_DAYS = 400  # ~13 months, so a yearly re-verify does not trip it
 
 VALID_METHODS = {"observed", "sourced", "inferred"}
 
-# Kodi releases, for validating `metadata.verified.kodi`. Extend as versions ship.
+# Kodi releases, for validating `metadata.verified-kodi`. Extend as versions ship.
 KNOWN_KODI = {
     "17": "Krypton", "18": "Leia", "19": "Matrix",
     "20": "Nexus", "21": "Omega", "22": "Piers",
@@ -178,27 +179,58 @@ def code_block_lines(lines: list[str], offset: int) -> set[int]:
     return inside
 
 
+VALID_CATEGORIES = {
+    "orientation", "access", "diagnosis", "playback", "python-addon",
+    "binary-addon", "skinning", "kodi-data", "shipping", "adjacent",
+}
+
+
 def check_verified(meta: dict, path: Path, f: Findings) -> None:
-    verified = meta.get("verified")
-    if not isinstance(verified, dict):
-        f.error(path, None, "frontmatter is missing `metadata.verified` "
-                            "(need: kodi, platform, date, method)")
+    """Validate the flat `metadata` map.
+
+    The Agent Skills spec defines `metadata` as a map from string keys to string
+    values, so the fields are flat `verified-*` keys rather than a nested block.
+    Multi-valued fields are comma-separated within one string.
+    """
+    if not isinstance(meta, dict) or not any(
+        k.startswith("verified-") for k in meta
+    ):
+        f.error(path, None, "frontmatter is missing the `metadata.verified-*` keys "
+                            "(need: verified-kodi, verified-platform, "
+                            "verified-date, verified-method)")
         return
 
-    kodi = verified.get("kodi")
+    category = meta.get("category")
+    if not category:
+        f.error(path, None, "`metadata.category` is required — it groups the skill "
+                            f"in the catalogue. One of: {', '.join(sorted(VALID_CATEGORIES))}")
+    elif category not in VALID_CATEGORIES:
+        f.error(path, None, f"`metadata.category` is {category!r}; must be one of "
+                            f"{', '.join(sorted(VALID_CATEGORIES))}")
+
+    for key, value in meta.items():
+        if not isinstance(value, str):
+            f.error(path, None, f"`metadata.{key}` must be a string — the Agent "
+                                "Skills spec allows only string values in metadata")
+
+    verified = {
+        k[len("verified-"):]: v
+        for k, v in meta.items()
+        if k.startswith("verified-") and isinstance(v, str)
+    }
+
+    kodi = [x.strip() for x in verified.get("kodi", "").split(",") if x.strip()]
     if not kodi:
-        f.error(path, None, "`metadata.verified.kodi` is required — list the versions "
+        f.error(path, None, "`metadata.verified-kodi` is required — list the versions "
                             "you actually tested, not a range")
     else:
-        if isinstance(kodi, str):
-            kodi = [kodi]
         for v in kodi:
             major = re.match(r"^(\d+)", str(v))
             if not major:
-                f.error(path, None, f"`verified.kodi` entry {v!r} does not start with a "
+                f.error(path, None, f"`verified-kodi` entry {v!r} does not start with a "
                                     "major version, e.g. '21.3 Omega'")
             elif major.group(1) not in KNOWN_KODI:
-                f.warn(path, None, f"`verified.kodi` entry {v!r} names an unrecognised "
+                f.warn(path, None, f"`verified-kodi` entry {v!r} names an unrecognised "
                                    f"Kodi major — known: {', '.join(sorted(KNOWN_KODI))}")
         majors = {re.match(r"^(\d+)", str(v)).group(1)
                   for v in kodi if re.match(r"^(\d+)", str(v))}
@@ -207,32 +239,32 @@ def check_verified(meta: dict, path: Path, f: Findings) -> None:
                                f"{CURRENT_STABLE_MAJOR} ({KNOWN_KODI[CURRENT_STABLE_MAJOR]})")
 
     if not verified.get("platform"):
-        f.error(path, None, "`metadata.verified.platform` is required — Kodi behaviour "
+        f.error(path, None, "`metadata.verified-platform` is required — Kodi behaviour "
                             "genuinely diverges across platforms")
 
     method = verified.get("method")
     if not method:
-        f.error(path, None, "`metadata.verified.method` is required "
+        f.error(path, None, "`metadata.verified-method` is required "
                             f"({'/'.join(sorted(VALID_METHODS))})")
     elif method not in VALID_METHODS:
-        f.error(path, None, f"`metadata.verified.method` is {method!r}, must be one of "
+        f.error(path, None, f"`metadata.verified-method` is {method!r}, must be one of "
                             f"{', '.join(sorted(VALID_METHODS))}")
 
     date = verified.get("date")
     if not date:
-        f.error(path, None, "`metadata.verified.date` is required (YYYY-MM-DD)")
+        f.error(path, None, "`metadata.verified-date` is required (YYYY-MM-DD)")
     else:
         try:
             when = dt.date.fromisoformat(str(date))
         except ValueError:
-            f.error(path, None, f"`metadata.verified.date` {date!r} is not YYYY-MM-DD")
+            f.error(path, None, f"`metadata.verified-date` {date!r} is not YYYY-MM-DD")
         else:
             age = (dt.date.today() - when).days
             if age > STALE_DAYS:
                 f.warn(path, None, f"last verified {age} days ago — re-check against a "
                                    "current Kodi, or say so under '## Open questions'")
             if age < 0:
-                f.error(path, None, f"`metadata.verified.date` {date} is in the future")
+                f.error(path, None, f"`metadata.verified-date` {date} is in the future")
 
 
 def check_skill(path: Path, f: Findings) -> None:
@@ -261,8 +293,7 @@ def check_skill(path: Path, f: Findings) -> None:
         f.error(path, None, f"frontmatter `name` is {name!r} but the directory is "
                             f"{path.parent.name!r} — they must match")
 
-    check_verified(meta if isinstance(meta.get("verified"), dict) else meta.get("metadata", {}),
-                   path, f)
+    check_verified(meta.get("metadata", {}), path, f)
 
     body_lines = text.split("\n")[body_start:]
     total = len(text.split("\n"))

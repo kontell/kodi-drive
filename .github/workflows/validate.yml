@@ -23,6 +23,11 @@ jobs:
       - name: Validate skills
         run: python3 scripts/validate.py
 
+      # The catalogue is generated, so a skill added without regenerating it
+      # would leave the two disagreeing.
+      - name: Catalogue is up to date
+        run: python3 scripts/build-index.py --check
+
   privacy:
     name: privacy scan
     runs-on: ubuntu-24.04

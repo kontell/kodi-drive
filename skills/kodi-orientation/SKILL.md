@@ -8,11 +8,11 @@ description: >
   have not worked on Kodi recently.
 license: CC-BY-SA-4.0
 metadata:
-  verified:
-    kodi: ["21.3 Omega", "22.0b1 Piers"]
-    platform: ["Linux x86_64", "Android TV"]
-    date: "2026-08-13"
-    method: observed
+  category: orientation
+  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-platform: "Linux x86_64, Android TV"
+  verified-date: "2026-08-13"
+  verified-method: "observed"
 ---
 
 # Working on Kodi

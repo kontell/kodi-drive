@@ -60,7 +60,8 @@ Why this is new rather than an edit:
 - [ ] `python3 scripts/scrub.py --detect` passes
 - [ ] No hostnames, IPs, tokens, serials, usernames, home paths, or library contents anywhere in the diff —
       including inside pasted log excerpts, which carry credentials at debug level
-- [ ] `metadata.verified` lists only versions and platforms I actually tested
+- [ ] `metadata.verified-*` lists only versions and platforms I actually tested,
+      and `metadata.category` is set
 - [ ] Anything I am unsure about is under an `## Open questions` heading, not stated as fact
 - [ ] This is not about an add-on excluded by the [add-on policy](../CONTRIBUTING.md#add-on-policy)
       (infringing content, builds, wizards, DRM circumvention). Unofficial and scraper add-ons are fine.

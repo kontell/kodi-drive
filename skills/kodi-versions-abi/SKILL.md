@@ -9,11 +9,11 @@ description: >
   versions becomes impossible.
 license: CC-BY-SA-4.0
 metadata:
-  verified:
-    kodi: ["21.3 Omega", "22.0b1 Piers"]
-    platform: ["Linux x86_64", "Android"]
-    date: "2026-08-13"
-    method: observed
+  category: shipping
+  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-platform: "Linux x86_64, Android"
+  verified-date: "2026-08-13"
+  verified-method: "observed"
 ---
 
 # Kodi versions and the ABI window

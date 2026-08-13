@@ -8,11 +8,11 @@ description: >
   will flag before a human looks.
 license: CC-BY-SA-4.0
 metadata:
-  verified:
-    kodi: ["22 master"]
-    platform: ["Linux x86_64"]
-    date: "2026-08-13"
-    method: sourced
+  category: shipping
+  verified-kodi: "22 master"
+  verified-platform: "Linux x86_64"
+  verified-date: "2026-08-13"
+  verified-method: "sourced"
 ---
 
 # Contributing upstream

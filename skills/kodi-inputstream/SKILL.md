@@ -8,11 +8,11 @@ description: >
   a tempo-shifting inputstream has to satisfy at once.
 license: CC-BY-SA-4.0
 metadata:
-  verified:
-    kodi: ["21.3 Omega", "22.0b1 Piers"]
-    platform: ["Linux x86_64", "Android TV"]
-    date: "2026-08-13"
-    method: observed
+  category: playback
+  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-platform: "Linux x86_64, Android TV"
+  verified-date: "2026-08-13"
+  verified-method: "observed"
 ---
 
 # Choosing and writing an inputstream

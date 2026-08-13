@@ -9,11 +9,11 @@ description: >
   answers zero.
 license: CC-BY-SA-4.0
 metadata:
-  verified:
-    kodi: ["21.3 Omega"]
-    platform: ["Android TV"]
-    date: "2026-08-13"
-    method: observed
+  category: access
+  verified-kodi: "21.3 Omega"
+  verified-platform: "Android TV"
+  verified-date: "2026-08-13"
+  verified-method: "observed"
 ---
 
 # Driving Kodi over ADB

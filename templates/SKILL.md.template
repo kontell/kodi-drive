@@ -6,11 +6,11 @@ description: >
   only part loaded before the agent decides to open the skill, so make it earn that.
 license: CC-BY-SA-4.0
 metadata:
-  verified:
-    kodi: ["21.3 Omega"]
-    platform: ["Linux x86_64"]
-    date: "YYYY-MM-DD"
-    method: observed
+  category: CATEGORY
+  verified-kodi: "21.3 Omega"
+  verified-platform: "Linux x86_64"
+  verified-date: "YYYY-MM-DD"
+  verified-method: observed
 ---
 
 # Title

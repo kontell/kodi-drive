@@ -9,11 +9,11 @@ description: >
   leaves behind.
 license: CC-BY-SA-4.0
 metadata:
-  verified:
-    kodi: ["21.3 Omega", "22.0b1 Piers"]
-    platform: ["Linux x86_64", "Windows x86_64"]
-    date: "2026-08-13"
-    method: observed
+  category: binary-addon
+  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-platform: "Linux x86_64, Windows x86_64"
+  verified-date: "2026-08-13"
+  verified-method: "observed"
 ---
 
 # Building binary add-ons

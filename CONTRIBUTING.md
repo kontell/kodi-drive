@@ -157,11 +157,11 @@ description: >
   are choosing an image format to serve to Kodi.
 license: CC-BY-SA-4.0
 metadata:
-  verified:
-    kodi: ["21.3 Omega", "22.0b1 Piers"]
-    platform: ["Linux x86_64"]
-    date: "2026-08-13"
-    method: observed
+  category: diagnosis
+  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-platform: "Linux x86_64, Android TV"
+  verified-date: "2026-08-13"
+  verified-method: observed
 ---
 ```
 
@@ -169,13 +169,17 @@ metadata:
 **what this is**, then **when to reach for it**. Lead with the use case. Agents match on the trigger, not
 on the topic.
 
-`metadata.verified` is what makes the claim checkable later:
+The [Agent Skills spec](https://agentskills.io/specification) permits only **string values** in
+`metadata`, so these are flat keys with comma-separated lists rather than a nested block.
+`validate.py` rejects anything else.
 
-- `kodi` — every version you actually tested. Not "21+". If you only tested Omega, say only Omega.
-- `platform` — Linux, Windows, macOS, Android TV, and so on. Behaviour genuinely diverges.
-- `date` — when you verified it. `validate.py` warns past ~12 months.
-- `method` — `observed`, `sourced`, or `inferred`, matching the tiers above. If a skill mixes tiers, use
-  the weakest one here and label the individual claims in the body.
+- `category` — groups the skill in [the catalogue](skills/README.md). Run `validate.py` against a bad
+  value to see the accepted set.
+- `verified-kodi` — every version you actually tested. Not "21+". If you only tested Omega, say only Omega.
+- `verified-platform` — Linux, Windows, macOS, Android TV, and so on. Behaviour genuinely diverges.
+- `verified-date` — when you verified it. `validate.py` warns past ~12 months.
+- `verified-method` — `observed`, `sourced`, or `inferred`, matching the tiers above. If a skill mixes
+  tiers, use the weakest one here and label the individual claims in the body.
 
 ### Style
 

@@ -8,11 +8,11 @@ description: >
   between unrelated work, and the import and API calls that cost whole seconds.
 license: CC-BY-SA-4.0
 metadata:
-  verified:
-    kodi: ["22.0-BETA1 Piers", "21.3 Omega"]
-    platform: ["Android TV", "Linux x86_64"]
-    date: "2026-08-13"
-    method: observed
+  category: diagnosis
+  verified-kodi: "22.0-BETA1 Piers, 21.3 Omega"
+  verified-platform: "Android TV, Linux x86_64"
+  verified-date: "2026-08-13"
+  verified-method: "observed"
 ---
 
 # Performance on real Kodi hardware

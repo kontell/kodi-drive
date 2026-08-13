@@ -8,11 +8,11 @@ description: >
   that differs per player core and the flag that silently downgrades itself.
 license: CC-BY-SA-4.0
 metadata:
-  verified:
-    kodi: ["21.3 Omega"]
-    platform: ["Linux x86_64"]
-    date: "2026-08-13"
-    method: observed
+  category: playback
+  verified-kodi: "21.3 Omega"
+  verified-platform: "Linux x86_64"
+  verified-date: "2026-08-13"
+  verified-method: "observed"
 ---
 
 # Starting playback correctly

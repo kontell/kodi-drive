@@ -8,11 +8,11 @@ description: >
   that actually work.
 license: CC-BY-SA-4.0
 metadata:
-  verified:
-    kodi: ["21.3 Omega", "22.0b1 Piers"]
-    platform: ["Android"]
-    date: "2026-08-13"
-    method: observed
+  category: binary-addon
+  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-platform: "Android"
+  verified-date: "2026-08-13"
+  verified-method: "observed"
 ---
 
 # Cross-compiling for Android

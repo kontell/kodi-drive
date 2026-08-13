@@ -1,5 +1,6 @@
 {
   "name": "kodi-drive",
+  "description": "Hard-won Kodi knowledge for coding agents — debugging procedure, live-testing loops, and the traps that fail silently.",
   "owner": {
     "name": "kontell",
     "url": "https://github.com/kontell"

@@ -75,6 +75,9 @@ consolation prize.
 
 - [`kodi-adb`](skills/kodi-adb/SKILL.md) — Drive Kodi on Android and Android TV over ADB — screenshots, logs, installing a build, restarting the app, and pulling databases.
 - [`kodi-addon-driving`](skills/kodi-addon-driving/SKILL.md) — Install, enable, and exercise a Kodi add-on without navigating menus — fire plugin routes directly, send it service commands, change its settings, and simulate an offline server.
+- [`kodi-addon-lifecycle`](skills/kodi-addon-lifecycle/SKILL.md) — Survive being started, stopped, updated and superseded.
+- [`kodi-addon-manifest`](skills/kodi-addon-manifest/SKILL.md) — Get addon.xml right, including the parts Kodi ignores without telling you.
+- [`kodi-addon-release`](skills/kodi-addon-release/SKILL.md) — Package and release a Kodi add-on without shipping a broken or incomplete zip.
 - [`kodi-announcements`](skills/kodi-announcements/SKILL.md) — React correctly to Kodi's notifications — Player.OnStop, Playlist.OnClear, OnAdd and friends — over JSON-RPC or in an add-on's onNotification.
 - [`kodi-clean-profile`](skills/kodi-clean-profile/SKILL.md) — Isolate a Kodi problem by reproducing it in a clean profile with no add-ons, then bisect to find the culprit.
 - [`kodi-connect`](skills/kodi-connect/SKILL.md) — Find a Kodi on the network and get control of it — JSON-RPC, EventServer, ADB, or SSH — and store its address and credentials safely.
@@ -84,12 +87,14 @@ consolation prize.
 - [`kodi-library-data`](skills/kodi-library-data/SKILL.md) — Kodi's own SQLite databases — where they live, which are per-profile, how to read one safely, and which user-facing operations destroy add-on data.
 - [`kodi-logs`](skills/kodi-logs/SKILL.md) — Read kodi.log usefully — turn on debug logging without the on-screen overlay, find the log on any platform, grep for the right severity, and read a crashlog.
 - [`kodi-performance`](skills/kodi-performance/SKILL.md) — Make a Kodi add-on fast on the hardware people actually run it on.
+- [`kodi-plugin-handles`](skills/kodi-plugin-handles/SKILL.md) — Close your plugin handle, or hang the caller forever.
 - [`kodi-process-control`](skills/kodi-process-control/SKILL.md) — Stop, restart, and measure a Kodi process without killing your own shell or measuring the wrong one.
 - [`kodi-profiles`](skills/kodi-profiles/SKILL.md) — Switch Kodi profiles from a script, and enable add-ons in the profile you actually meant.
 - [`kodi-screenshot-review`](skills/kodi-screenshot-review/SKILL.md) — Take a Kodi screenshot and actually read it, rather than filing it next to a claim of success.
 - [`kodi-test-rig`](skills/kodi-test-rig/SKILL.md) — Stand up a throwaway Kodi an agent can restart, misconfigure, and break.
 - [`kodi-triage`](skills/kodi-triage/SKILL.md) — Turn a vague Kodi complaint into a diagnosis.
 - [`kodi-ui-navigation`](skills/kodi-ui-navigation/SKILL.md) — Navigate Kodi's UI blind without firing actions at the wrong control.
+- [`kodi-versions-abi`](skills/kodi-versions-abi/SKILL.md) — Pick a version number and an API level that the Kodi versions you care about will actually accept.
 
 <!-- END SKILL INDEX -->
 

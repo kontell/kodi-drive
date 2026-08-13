@@ -74,7 +74,9 @@ HOSTNAME = _re(r"\b[a-z0-9][a-z0-9-]*\.(local|lan|internal|xyz|duckdns\.org|"
                r"(?![.\w-])(?!\s*\()")
 ALLOWED_HOSTS = _re(
     r"^(settings\.local|scrub-map\.local|claude\.local|mcp\.local|env\.local|"
-    r"config\.local|example\.(?:com|org|net)|test\.local)$"
+    r"config\.local|example\.(?:com|org|net)|test\.local|"
+    # Kodi's own scraper value for a path row, not a host.
+    r"metadata\.local)$"
 )
 
 RULES = [

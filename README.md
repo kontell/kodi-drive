@@ -93,6 +93,8 @@ consolation prize.
 - [`kodi-process-control`](skills/kodi-process-control/SKILL.md) — Stop, restart, and measure a Kodi process without killing your own shell or measuring the wrong one.
 - [`kodi-profiles`](skills/kodi-profiles/SKILL.md) — Switch Kodi profiles from a script, and enable add-ons in the profile you actually meant.
 - [`kodi-screenshot-review`](skills/kodi-screenshot-review/SKILL.md) — Take a Kodi screenshot and actually read it, rather than filing it next to a claim of success.
+- [`kodi-skin-res-scaling`](skills/kodi-skin-res-scaling/SKILL.md) — Understand Kodi's skin coordinate spaces and which XML file wins when two share a name.
+- [`kodi-skin-xml`](skills/kodi-skin-xml/SKILL.md) — Edit Kodi skin XML without silent failures.
 - [`kodi-test-rig`](skills/kodi-test-rig/SKILL.md) — Stand up a throwaway Kodi an agent can restart, misconfigure, and break.
 - [`kodi-triage`](skills/kodi-triage/SKILL.md) — Turn a vague Kodi complaint into a diagnosis.
 - [`kodi-ui-navigation`](skills/kodi-ui-navigation/SKILL.md) — Navigate Kodi's UI blind without firing actions at the wrong control.

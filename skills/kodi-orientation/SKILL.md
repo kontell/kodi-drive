@@ -97,12 +97,17 @@ prevent.
 [`kodi-addon-driving`](../kodi-addon-driving/SKILL.md) ·
 [`kodi-performance`](../kodi-performance/SKILL.md)
 
+**Skinning**
+[`kodi-skin-xml`](../kodi-skin-xml/SKILL.md) ·
+[`kodi-skin-res-scaling`](../kodi-skin-res-scaling/SKILL.md)
+
 **Kodi's own data**
 [`kodi-library-data`](../kodi-library-data/SKILL.md)
 
 **Shipping it**
 [`kodi-versions-abi`](../kodi-versions-abi/SKILL.md) ·
-[`kodi-addon-release`](../kodi-addon-release/SKILL.md)
+[`kodi-addon-release`](../kodi-addon-release/SKILL.md) ·
+[`kodi-contributing`](../kodi-contributing/SKILL.md)
 
 ## Things that surprise people coming from other software
 

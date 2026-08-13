@@ -121,6 +121,32 @@ clamp.
 
 ---
 
+## PVR timer-type pre-selection ignores every usability flag
+
+**Status: `unreported`.**
+**Affects:** Omega and Piers.
+**Severity:** a timer type that cannot work appears pre-selected.
+
+`CPVRTimerType::GetFirstAvailableType` returns the add-on's first registered type
+and nothing else (`xbmc/pvr/timers/PVRTimerType.cpp:106-118`):
+
+```cpp
+const std::vector<std::shared_ptr<CPVRTimerType>>& types = client->GetTimerTypes();
+if (!types.empty())
+  return *(types.begin());
+```
+
+It checks none of `REQUIRES_EPG_TAG_ON_CREATE`, `IS_READONLY` or
+`FORBIDS_NEW_INSTANCES`. `GUIDialogPVRTimerSettings` then re-inserts the type it
+had just filtered out of its own list, so adding a timer with no EPG context
+offers an unusable type, already selected.
+
+PVR add-ons work around it by ordering their types so the first is usable in
+every context — which reads as a documented convention and is not one. See
+[`kodi-pvr-addon`](../kodi-pvr-addon/SKILL.md).
+
+---
+
 ## Kodi 21.3 against libpython3.14 segfaults on rapid add-on cycling
 
 **Status: `unreported`.**

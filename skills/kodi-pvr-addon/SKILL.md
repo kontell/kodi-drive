@@ -4,8 +4,8 @@ description: >
   Write a Kodi PVR client that plays, records and reports correctly. Use when
   building or debugging a PVR add-on, when playback works from one part of the UI
   and not another, when a stream session is never closed, or when choosing between
-  the stream-properties and demuxer approaches. Covers which UI path calls which
-  entry point, and the stop callback that does not fire.
+  the stream-properties and demuxer approaches. Covers the user setting that
+  decides which entry point Kodi calls, and the stop callback that does not fire.
 license: CC-BY-SA-4.0
 metadata:
   verified:
@@ -26,23 +26,41 @@ inputstream.ffmpegdirect for free.
 
 Its cost is the entire section below: you give up the lifecycle callbacks.
 
-## Which UI path calls which entry point
+## A user setting decides which recording entry point Kodi uses
 
-This is the trap that produces "it plays from the home screen but not from the
-Recordings section". Recordings have **two completely different code paths** in
-Kodi v21:
+This is the trap that produces "it plays from one place and not another". Two
+different add-on entry points can be reached **from the same window, by the same
+button** — and what selects between them is a setting, not the UI location.
 
-| Entry point | Calls | Notes |
+`CPVRGUIActionsPlayback::PlayRecording` branches at
+`xbmc/pvr/guilib/PVRGUIActionsPlayback.cpp:127`:
+
+```cpp
+if (!item.m_bIsFolder && VIDEO_UTILS::IsAutoPlayNextItem(item))
+```
+
+| Autoplay-next-item | Route | Your entry point |
 |---|---|---|
-| Home-screen widgets, EPG actions | `GetRecordingStreamProperties()` | `OpenRecordedStream()` is **never** called |
-| PVR Recordings window (10701) | `OpenRecordedStream()` | `GetRecordingStreamProperties()` is **not** called |
+| **off** | → `CPVRPlaybackState::StartPlayback` | **`GetRecordingStreamProperties()`** |
+| **on** | builds a playlist, posts `TMSG_MEDIA_PLAY` | `pvr://recordings/…` via the ordinary file pipeline → **`OpenRecordedStream()`** |
 
-The second opens `pvr://recordings/...` directly through
-`CInputStreamPVRRecording`. So an add-on that implements only stream properties
-works from a widget and fails from the Recordings list, and vice versa.
+`PlayRecordingFolder()` takes the playlist route too.
 
-**Implement both**, and test both. Reaching one from the other is not possible
-from your side.
+`StartPlayback` branches on item type and calls `GetRecordingStreamProperties()`
+for any `IsPVRRecording()` item (`xbmc/pvr/PVRPlaybackState.cpp:363-365`), then
+applies the returned URL with `SetDynPath` **only `if (props.size())`**. So the
+`CInputStreamPVRRecording` byte-stream route is also the **fallback when your
+add-on returns no properties** — not a separate window-driven path.
+
+**Implement both, and test both — with the setting flipped each way.** Testing
+only one value of a setting you did not know was involved is how this stays
+hidden.
+
+> **Correction, 2026-08-13.** This skill previously said the Recordings window
+> (10701) calls `OpenRecordedStream()` and never calls
+> `GetRecordingStreamProperties()`. That is wrong. It was inherited from a
+> project note that was also wrong, and the source above disproves both. The
+> practical advice — implement both — was right for the wrong reason.
 
 ## `CloseLiveStream()` does not fire on a normal stop
 
@@ -75,10 +93,27 @@ detects the pending timeshifted state and applies the same overrides. Otherwise
 the global settings resolve a live-only URL that cannot seek back to the chosen
 programme.
 
-## Timer types: the first one listed is the default
+## Timer types: list first the one that works without an EPG tag
 
-Declare your timer types in the order you want them offered. There is no
-"default" flag — position is the mechanism.
+Kodi pre-selects your **first registered type**, and it does so without checking
+whether that type can actually be used in the current context.
+`CPVRTimerType::GetFirstAvailableType` is, in full
+(`xbmc/pvr/timers/PVRTimerType.cpp:106-118`):
+
+```cpp
+const std::vector<std::shared_ptr<CPVRTimerType>>& types = client->GetTimerTypes();
+if (!types.empty())
+  return *(types.begin());
+```
+
+No regard for `REQUIRES_EPG_TAG_ON_CREATE`, `IS_READONLY`, or
+`FORBIDS_NEW_INSTANCES`. So if your first type requires an EPG tag, adding a
+timer with no EPG context offers a type that cannot work, already selected.
+
+**This is an upstream defect, not a design you should lean on** — see
+[`kodi-known-defects`](../kodi-known-defects/SKILL.md). Order your types so the
+first is the one usable in every context (a one-shot manual timer), and treat
+that as a workaround rather than the intended mechanism.
 
 A useful set is one-shot manual, one-shot from EPG, a read-only child type
 created by a series rule, and the series rule itself.
@@ -117,8 +152,8 @@ for nothing.
 
 ## What fails silently
 
-- An add-on implementing only one recording path works from one UI location and
-  not another, with no error.
+- An add-on implementing only one recording path works with a user setting one
+  way and not the other, from the same button, with no error.
 - `CloseLiveStream()` never firing leaks server-side sessions invisibly.
 - `EPGPLAYBACKASLIVE` silently rerouting playback past your EPG-path handling.
 - A future timer with the same truncated title hijacking an EPG cross-reference.
@@ -129,8 +164,9 @@ for nothing.
 
 - Whether Kodi 22 changed the `CloseLiveStream()` behaviour under the
   stream-properties path has not been retested.
-- The two-recording-paths split was established on v21; whether 22 unified them
-  is unknown.
+- On Kodi 22, `GetRecordingStreamProperties` is called from
+  `PVRPlaybackState.cpp:204`, so the overall shape holds — but the
+  `IsAutoPlayNextItem` branch has not been re-verified there.
 
 ## See also
 

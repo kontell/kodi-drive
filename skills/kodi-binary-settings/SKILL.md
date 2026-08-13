@@ -42,6 +42,18 @@ progress dialog — then fights the still-open settings dialog.
 If your action needs no dialog at all, the toggle is fine. If it needs input, it
 is not.
 
+### The problem is the open settings dialog, not modals in general
+
+Worth stating plainly, because the section above invites the wrong conclusion:
+**modal `Select` and `YesNo` dialogs work fine from a PVR menu hook.** No
+round-trip is needed there — nothing modal is already on screen.
+
+The workaround below exists *only* for settings action-buttons, which fire while
+the settings dialog is up. Do not carry it into menu-hook code.
+
+Menu hooks have their own limits, which are different ones — see
+[`kodi-pvr-addon`](../kodi-pvr-addon/SKILL.md).
+
 ## The round-trip that does work
 
 Use an action control that closes settings first, then re-enters through the

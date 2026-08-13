@@ -162,6 +162,13 @@ def scan_line(line: str) -> list[tuple[str, str, str]]:
                     "IP address — use <KODI_HOST>, or an RFC 5737 range "
                     "(192.0.2.x, 198.51.100.x, 203.0.113.x) for examples"))
 
+    # Claude Code writes an `originSessionId:` UUID into every memory file it
+    # creates, so scanning a memory directory otherwise reports a uuid finding on
+    # nearly every file and drowns the real ones. It identifies a session, not a
+    # person or a media item.
+    if re.match(r"^\s*originSessionId\s*:", line):
+        return out
+
     for m in HOSTNAME.finditer(line):
         if ALLOWED_HOSTS.match(m.group(0)):
             continue

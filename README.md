@@ -100,6 +100,7 @@ consolation prize.
 - [`kodi-process-control`](skills/kodi-process-control/SKILL.md) — Stop, restart, and measure a Kodi process without killing your own shell or measuring the wrong one.
 - [`kodi-profiles`](skills/kodi-profiles/SKILL.md) — Switch Kodi profiles from a script, and enable add-ons in the profile you actually meant.
 - [`kodi-pvr-addon`](skills/kodi-pvr-addon/SKILL.md) — Write a Kodi PVR client that plays, records and reports correctly.
+- [`kodi-pvr-menu-hooks`](skills/kodi-pvr-menu-hooks/SKILL.md) — Add context-menu entries to a binary PVR add-on, and know what they can and cannot do.
 - [`kodi-screenshot-review`](skills/kodi-screenshot-review/SKILL.md) — Take a Kodi screenshot and actually read it, rather than filing it next to a claim of success.
 - [`kodi-skin-res-scaling`](skills/kodi-skin-res-scaling/SKILL.md) — Understand Kodi's skin coordinate spaces and which XML file wins when two share a name.
 - [`kodi-skin-xml`](skills/kodi-skin-xml/SKILL.md) — Edit Kodi skin XML without silent failures.

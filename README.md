@@ -77,7 +77,9 @@ consolation prize.
 - [`kodi-addon-driving`](skills/kodi-addon-driving/SKILL.md) — Install, enable, and exercise a Kodi add-on without navigating menus — fire plugin routes directly, send it service commands, change its settings, and simulate an offline server.
 - [`kodi-clean-profile`](skills/kodi-clean-profile/SKILL.md) — Isolate a Kodi problem by reproducing it in a clean profile with no add-ons, then bisect to find the culprit.
 - [`kodi-connect`](skills/kodi-connect/SKILL.md) — Find a Kodi on the network and get control of it — JSON-RPC, EventServer, ADB, or SSH — and store its address and credentials safely.
+- [`kodi-freeze-diagnosis`](skills/kodi-freeze-diagnosis/SKILL.md) — Work out why Kodi froze, hung, or stopped responding — including getting native backtraces off an unrooted Android TV box.
 - [`kodi-jsonrpc`](skills/kodi-jsonrpc/SKILL.md) — Use Kodi's JSON-RPC API as ground truth instead of guessing from screenshots.
+- [`kodi-known-defects`](skills/kodi-known-defects/SKILL.md) — Kodi and inputstream.adaptive defects confirmed by investigation, with their symptoms, upstream status, and how to recognise each from a log.
 - [`kodi-library-data`](skills/kodi-library-data/SKILL.md) — Kodi's own SQLite databases — where they live, which are per-profile, how to read one safely, and which user-facing operations destroy add-on data.
 - [`kodi-logs`](skills/kodi-logs/SKILL.md) — Read kodi.log usefully — turn on debug logging without the on-screen overlay, find the log on any platform, grep for the right severity, and read a crashlog.
 - [`kodi-process-control`](skills/kodi-process-control/SKILL.md) — Stop, restart, and measure a Kodi process without killing your own shell or measuring the wrong one.

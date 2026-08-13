@@ -60,9 +60,14 @@ household's public IP**, SMB hostnames and share paths, the device model and bui
 inventory. `notes/` is not a git repo, so none of it has been pushed — but it sits inside a tree that is
 otherwise all git working copies, and it is one `git add` from being published.
 
-**Scale of the scrubbing problem:** the personal Jellyfin hostname appears **~2,300 times** across `notes/`
-and `plugin.video.kofin/docs/`. This is not an eyeball-and-fix job; it needs a deterministic
-mapping-based redactor (below) run before any of that content moves.
+**Scale of the scrubbing problem — corrected 2026-08-13.** An earlier count put the personal Jellyfin
+hostname at ~2,300 occurrences. That figure is real but misleading: **2,296 of them are inside the raw
+3.3 MB `kodi.log` in the evidence bundle**, which is never harvested. The markdown Phase 4 actually
+touches holds **15** — 2 in `notes/*.md` and 13 across `plugin.video.kofin/docs/`.
+
+So the redaction is a handful of substitutions, not a bulk job. The mapping-based redactor is still the
+right tool — deterministic, repeatable, and it catches what an eye skips — but it is not the bottleneck
+it looked like, and Phase 4 is correspondingly cheaper than planned.
 
 Actions:
 1. ~~Rotate the Jellyfin api_key~~ — **done**. Still outstanding: the Audiobookshelf JWT, and the

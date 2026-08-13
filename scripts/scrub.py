@@ -135,6 +135,17 @@ def iter_files(root: Path):
         yield path
 
 
+# Four-part version numbers are everywhere in this domain — Jellyfin plugin
+# versions (10.11.0.1), .NET assembly versions (1.0.0.0) — and every octet is
+# under 256, so the numeric check cannot separate them from an address.
+#
+# The exemption is deliberately narrow: a version keyword must sit immediately
+# before the number, not merely somewhere on the line. A line-level test hides
+# real addresses in ordinary prose — "connect to 172.16.9.9 for the build server"
+# was exempted by the word "build" during testing.
+VERSION_PREFIX = _re(r"(version|assembly|semver|\bv)\s*[:=]?\s*$")
+
+
 def scan_line(line: str) -> list[tuple[str, str, str]]:
     """Return (rule, match, hint) for each finding on this line."""
     out = []
@@ -144,6 +155,8 @@ def scan_line(line: str) -> list[tuple[str, str, str]]:
         if any(int(o) > 255 for o in octets):
             continue  # a version string, not an address
         if ALLOWED_IPS.match(ip):
+            continue
+        if VERSION_PREFIX.search(line[:m.start(1)]):
             continue
         out.append(("ip-address", ip,
                     "IP address — use <KODI_HOST>, or an RFC 5737 range "

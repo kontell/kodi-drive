@@ -1,8 +1,9 @@
 # kodi-drive — a shared Kodi knowledge repo for coding agents
 
-> Implementation plan. **Status as of 2026-08-13: phases 0–3 and 5 done, phase 4 under way.
-> 17 skills, 6 helpers, verified against a live Kodi 21.3. Phase 6 (deep dive), phase 7
-> (stripping the source repos) and the `<DEVBOX>` survey remain.**
+> Implementation plan. **Status as of 2026-08-13: phases 0–3 and 5 done, phase 4 mostly done.
+> 30 skills, 6 helpers, installed and loading as a plugin. Remaining: `addons/` and
+> `adjacent/` content, phase 6 (deep dive), phase 7 (stripping the source repos),
+> and the `<DEVBOX>` survey.**
 >
 > Private strings in this document use the placeholder convention defined below
 > (`<JELLYFIN_HOST>`, `/home/<user>/`, …) because this file ships in the repo.
@@ -528,7 +529,7 @@ the transcripts, which are large and where several of the best findings on this 
 | **1b** | ⬜ **Survey `<DEVBOX>`** — a session on that machine writes `docs/harvest-devbox.md` into the shared tree. |
 | **2** | ✅ Five helpers vendored + kodi-discover added, all live-verified. Reconciliation against `<DEVBOX>` copies still pending. |
 | **3** | ✅ Split into kodi-connect, kodi-jsonrpc, kodi-builtins (folded into kodi-remote), kodi-adb, kodi-ui-navigation, kodi-screenshot-review, kodi-addon-driving. |
-| **4** | 🔶 **In progress.** Redaction map built and proven. Harvested: the two freeze investigations, the widget-latency perf study, the announcement-semantics investigation. Remaining: ~15 of 19 `notes/`, `plugin.video.kofin/docs/` (23 files), the 8 CLAUDE.md files, ~100 memory notes, git histories. |
+| **4** | 🔶 **Mostly done for generic knowledge.** 30 skills cover the freeze/perf/announcement investigations, the full Python and binary add-on surfaces, skinning, databases, artwork, release and upstream contribution. Remaining: 6 Jellyfin-specific notes → `adjacent/`, 33 kofin docs and 7 CLAUDE.md files (mostly add-on-specific → `addons/`), 90 memory notes (largely already superseded by the skills above — audit rather than harvest). |
 | **5** | ✅ kodi-triage, kodi-logs, kodi-clean-profile, kodi-test-rig, kodi-process-control, kodi-profiles, kodi-library-data. Repo still **private** — flip after phase 4 scrubbing. |
 | **6** | ⬜ kodi-architecture + kodi-source-map (one session). |
 | **7** | ⬜ Strip the source repos; install the pointer stanza; consolidate memories from both machines. |

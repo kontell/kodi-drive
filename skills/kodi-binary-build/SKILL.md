@@ -21,6 +21,25 @@ metadata:
 The Kodi add-on superbuild works, and then produces artifacts that fail on other
 people's machines for reasons invisible on yours.
 
+## Use Kodi's depends system; do not hand-roll the cmake
+
+Start here, because the alternative is expensive and looks reasonable at every
+individual step.
+
+```
+<kodi-source>/tools/depends/target/binary-addons/
+```
+
+Point that at your add-on and it handles the toolchain file, the cmake modules,
+the dependency builds and the library ordering. It needs the **full Kodi source
+tree** for the version you are targeting — which you already need for the headers.
+
+The failure mode worth naming: hand-crafting `KodiConfig.cmake`, copying cmake
+modules across piecemeal, building FFmpeg separately, and then fixing link
+ordering by hand. Each step is individually plausible and the whole thing is work
+the depends system already does. It is easy to do this *with the full Kodi source
+already cloned and unused*.
+
 ## The ABI floor is set by the build host, not by your code
 
 This is the one that costs the most time. A trivial `.so` using only

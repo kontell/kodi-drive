@@ -295,6 +295,24 @@ def check_skill(path: Path, f: Findings) -> None:
                         f"link target does not exist: {m.group(1)}")
 
 
+def check_doc_links(f: Findings) -> None:
+    """Relative links in the top-level docs, which point into skills/."""
+    for name in ("README.md", "CONTRIBUTING.md"):
+        doc = REPO / name
+        if not doc.exists():
+            continue
+        for i, line in enumerate(doc.read_text(encoding="utf-8").split("\n"), 1):
+            for m in re.finditer(r"\]\(((?!https?:|#|mailto:)[^)#]+)", line):
+                target = m.group(1)
+                # `../../issues/new?...` and friends are GitHub's relative repo
+                # URLs, resolved by the web UI rather than by the filesystem.
+                if re.match(r"\.\./\.\./(issues|pulls|discussions|wiki|blob|tree)\b",
+                            target):
+                    continue
+                if not (REPO / target).exists():
+                    f.error(doc, i, f"link target does not exist: {target}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -318,6 +336,11 @@ def main() -> int:
     f = Findings()
     for path in skills:
         check_skill(path, f)
+
+    # The top-level docs link into skills/ too, and a README pointing at a skill
+    # that was never written is the first thing a new reader hits.
+    if not args.paths:
+        check_doc_links(f)
 
     for w in f.warnings:
         print(f"warning: {w}")

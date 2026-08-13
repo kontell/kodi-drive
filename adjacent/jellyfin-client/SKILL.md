@@ -87,6 +87,54 @@ for AV1, TS for everything else) means the server selects by codec-copy
 compatibility — so "preferred codec = AV1" only yields AV1 when the *source* is
 already AV1. That is Jellyfin's design, not a bug.
 
+## `GetAudioEncoder` null-derefs when the server elects to stream-copy audio
+
+**A server-side crash you trigger by asking for the codec you already have.**
+
+`EncodingHelper.GetAudioEncoder` (`EncodingHelper.cs:746-753` in 10.11.10) matches a
+regex against `state.OutputAudioCodec` **with no null guard** — unlike
+`GetVideoEncoder` at line 468, which does guard. When the server decides to
+**stream-copy** the audio, `OutputAudioCodec` is null, `IsMatch(null)` throws
+`ArgumentNullException`, and the request returns **HTTP 400 "Error processing
+request."**
+
+You reach it by sending `AudioCodec=<the source codec>`: source equals target, so
+the server picks a copy, and the copy path is the one that crashes.
+
+It is easy to hit on live TV because **channel metadata is declared, not probed**
+(`Live tv media info probe took 0.0001s`). A channel declaring E-AC3 5.1 while
+actually carrying stereo AAC will still make the client ask for `eac3`.
+
+Three fixes, each independently verified to turn 400 into 200:
+
+| | |
+|---|---|
+| `AudioCodec=copy` | explicit copy |
+| `AudioCodec=aac` | force a re-encode |
+| `TranscodingMaxAudioChannels=2` | channel count over the limit forces a re-encode |
+
+The durable shape: keep `eac3`/`ac3` in your **DirectPlayProfiles** so passthrough
+still works, and leave them out of the **TranscodingProfile** audio list so the
+transcode target is never the source codec.
+
+## `ReadAtNativeFramerate` is snapshotted at stream open
+
+`MediaSourceInfo.ReadAtNativeFramerate` puts `-re` on the remux ffmpeg, which
+paces output to realtime — so the first HLS segment takes a full segment-duration
+to appear. Measured: `live.m3u8` blocking **4.83 s** per channel change, dropping
+to **1.53 s** with it off.
+
+**The trap is the caching, not the setting.** The value is snapshotted when the
+shared stream opens and persists until the consumer count reaches zero, so
+**changing the tuner setting does not affect an already-open stream**. Two A/B runs
+falsely showed no difference before that was understood.
+
+Related, and worth checking if you see this: **every
+`PlaybackInfo(AutoOpenLiveStream)` adds a consumer**, and only a correctly-formed
+`POST /LiveStreams/Close?liveStreamId=X` decrements one. A client that never closes
+leaks them — one observed stream reached 7 consumers and stayed alive 5 hours
+after playback stopped.
+
 ## The HLS master advertises what the server assumed
 
 For a multi-audio-track live source, Jellyfin stream-copies an un-mapped track —

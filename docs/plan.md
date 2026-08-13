@@ -1,9 +1,9 @@
 # kodi-drive — a shared Kodi knowledge repo for coding agents
 
-> Implementation plan. **Status as of 2026-08-13: phases 0–3 and 5 done, phase 4 mostly done.
-> 30 skills, 6 helpers, installed and loading as a plugin. Remaining: `addons/` and
-> `adjacent/` content, phase 6 (deep dive), phase 7 (stripping the source repos),
-> and the `<DEVBOX>` survey.**
+> Implementation plan. **Status as of 2026-08-13: phases 0–5 done, including the second-machine
+> survey. 39 skills, 6 helpers, installed and loading as a plugin. Remaining: phase 6 (the
+> orientation deep dive), phase 7 (stripping the source repos), `addons/` content, and
+> pushing to GitHub.**
 >
 > Private strings in this document use the placeholder convention defined below
 > (`<JELLYFIN_HOST>`, `/home/<user>/`, …) because this file ships in the repo.

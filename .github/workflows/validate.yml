@@ -82,12 +82,22 @@ jobs:
 
       # bin/ lands on the PATH of every agent that installs this plugin, so a
       # quoting bug here becomes a quoting bug in somebody else's session.
-      - name: Check bin/ and scripts/
+      #
+      # Select by shebang rather than by path: bin/ holds Python helpers too, and
+      # shellcheck errors out (SC1071) rather than skipping a file it cannot parse.
+      - name: Check shell scripts
         run: |
-          shopt -s nullglob
-          files=(bin/* scripts/*.sh)
+          mapfile -t files < <(
+            {
+              # executables, by shebang
+              grep -rlE '^#!.*/(env +)?(bash|sh|dash|ksh)\b' bin scripts lib 2>/dev/null || true
+              # sourced libraries have no shebang; they declare their shell instead
+              grep -rlE '^# shellcheck shell=' bin scripts lib 2>/dev/null || true
+            } | sort -u
+          )
           if [ ${#files[@]} -eq 0 ]; then
-            echo "no shell scripts yet"
+            echo "no shell scripts found"
             exit 0
           fi
+          printf 'checking: %s\n' "${files[@]}"
           shellcheck -S warning "${files[@]}"

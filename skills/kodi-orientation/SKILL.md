@@ -106,6 +106,10 @@ prevent.
 [`kodi-database-writing`](../kodi-database-writing/SKILL.md) ·
 [`kodi-texture-cache`](../kodi-texture-cache/SKILL.md)
 
+**Binary add-ons**
+[`kodi-binary-build`](../kodi-binary-build/SKILL.md) ·
+[`kodi-android-ndk`](../kodi-android-ndk/SKILL.md)
+
 **Shipping it**
 [`kodi-versions-abi`](../kodi-versions-abi/SKILL.md) ·
 [`kodi-addon-release`](../kodi-addon-release/SKILL.md) ·

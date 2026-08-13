@@ -78,7 +78,9 @@ consolation prize.
 - [`kodi-addon-lifecycle`](skills/kodi-addon-lifecycle/SKILL.md) — Survive being started, stopped, updated and superseded.
 - [`kodi-addon-manifest`](skills/kodi-addon-manifest/SKILL.md) — Get addon.xml right, including the parts Kodi ignores without telling you.
 - [`kodi-addon-release`](skills/kodi-addon-release/SKILL.md) — Package and release a Kodi add-on without shipping a broken or incomplete zip.
+- [`kodi-android-ndk`](skills/kodi-android-ndk/SKILL.md) — Cross-compile a Kodi binary add-on and its dependencies for Android.
 - [`kodi-announcements`](skills/kodi-announcements/SKILL.md) — React correctly to Kodi's notifications — Player.OnStop, Playlist.OnClear, OnAdd and friends — over JSON-RPC or in an add-on's onNotification.
+- [`kodi-binary-build`](skills/kodi-binary-build/SKILL.md) — Build a Kodi binary add-on that installs on the Kodi versions you meant, on the systems your users have.
 - [`kodi-clean-profile`](skills/kodi-clean-profile/SKILL.md) — Isolate a Kodi problem by reproducing it in a clean profile with no add-ons, then bisect to find the culprit.
 - [`kodi-connect`](skills/kodi-connect/SKILL.md) — Find a Kodi on the network and get control of it — JSON-RPC, EventServer, ADB, or SSH — and store its address and credentials safely.
 - [`kodi-contributing`](skills/kodi-contributing/SKILL.md) — Get a change accepted into Kodi itself, or an add-on into the official repository.

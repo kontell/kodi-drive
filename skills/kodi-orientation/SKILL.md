@@ -73,6 +73,10 @@ prevent.
 **Something is broken and you do not know why** →
 [`kodi-triage`](../kodi-triage/SKILL.md). It routes everything else.
 
+**Need to check what Kodi actually does** →
+[`kodi-source-map`](../kodi-source-map/SKILL.md) to find it,
+[`kodi-architecture`](../kodi-architecture/SKILL.md) for how the pieces run.
+
 **Getting and using a Kodi**
 [`kodi-connect`](../kodi-connect/SKILL.md) ·
 [`kodi-jsonrpc`](../kodi-jsonrpc/SKILL.md) ·
@@ -107,7 +111,8 @@ prevent.
 
 **Skinning**
 [`kodi-skin-xml`](../kodi-skin-xml/SKILL.md) ·
-[`kodi-skin-res-scaling`](../kodi-skin-res-scaling/SKILL.md)
+[`kodi-skin-res-scaling`](../kodi-skin-res-scaling/SKILL.md) ·
+[`kodi-keymaps`](../kodi-keymaps/SKILL.md)
 
 **Kodi's own data**
 [`kodi-library-data`](../kodi-library-data/SKILL.md) ·

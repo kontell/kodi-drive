@@ -17,7 +17,9 @@ See [`../README.md`](../README.md) for how to install and use these, and
 
 *The map, and turning a vague complaint into a diagnosis.*
 
+- [`kodi-architecture`](kodi-architecture/SKILL.md) — How Kodi is put together at runtime — the app thread and what must not block it, the thread pools, how work crosses threads, and how add-ons attach.
 - [`kodi-orientation`](kodi-orientation/SKILL.md) — Start here for any Kodi work.
+- [`kodi-source-map`](kodi-source-map/SKILL.md) — Find your way around Kodi's C++ source quickly — where each subsystem lives, the naming conventions that make grep work, and the single class that indexes everything.
 - [`kodi-triage`](kodi-triage/SKILL.md) — Turn a vague Kodi complaint into a diagnosis.
 
 ## Getting hold of a Kodi

@@ -556,7 +556,7 @@ the transcripts, which are large and where several of the best findings on this 
 | **3** | ✅ Split into kodi-connect, kodi-jsonrpc, kodi-builtins (folded into kodi-remote), kodi-adb, kodi-ui-navigation, kodi-screenshot-review, kodi-addon-driving. |
 | **4** | 🔶 **Mostly done for generic knowledge.** 30 skills cover the freeze/perf/announcement investigations, the full Python and binary add-on surfaces, skinning, databases, artwork, release and upstream contribution. Remaining: 6 Jellyfin-specific notes → `adjacent/`, 33 kofin docs and 7 CLAUDE.md files (mostly add-on-specific → `addons/`), 90 memory notes (largely already superseded by the skills above — audit rather than harvest). |
 | **5** | ✅ kodi-triage, kodi-logs, kodi-clean-profile, kodi-test-rig, kodi-process-control, kodi-profiles, kodi-library-data. Repo still **private** — flip after phase 4 scrubbing. |
-| **6** | ⬜ kodi-architecture + kodi-source-map (one session). |
+| **6** | ✅ **Done.** kodi-source-map and kodi-architecture, both `sourced` tier, every cited claim re-verified against the 21.3 tree. Per-subsystem skills remain deferred until real work demands them. |
 | **7** | ⬜ Strip the source repos; install the pointer stanza; consolidate memories from both machines. |
 | **8** | ⬜ /kodi-drive:contribute + /kodi-drive:audit; announce. File the three remaining upstream defects. |
 

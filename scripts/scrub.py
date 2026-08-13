@@ -169,8 +169,15 @@ def scan_line(line: str) -> list[tuple[str, str, str]]:
                     "looks like a personal or LAN hostname — use <KODI_HOST> "
                     "or <SERVER_URL>"))
 
-    digest_line = re.search(r"\b(md5|sha1|sha256|sha512|checksum|digest|hash)\b",
-                            line, re.IGNORECASE)
+    # A digest is exempt when the line names one, OR when the line has the shape
+    # `md5sum` output: 32 hex, whitespace, a filename. Kodi add-on repositories
+    # ship addons.xml.md5, and any checksum block is a bare list of hashes with
+    # no "md5" on the individual lines, so the same-line test alone is not enough.
+    digest_line = (
+        re.search(r"\b(md5|sha1|sha256|sha512|checksum|digest|hash)\b",
+                  line, re.IGNORECASE)
+        or re.match(r"^\s*[0-9a-f]{32}\s+\*?[\w./-]+\s*$", line)
+    )
     for rule in RULES:
         if rule.name == "hex-secret" and digest_line:
             continue

@@ -27,6 +27,46 @@ growing.** `inputstream.ffmpegdirect` treats it that way and cannot seek in it �
 would not seek. `inputstream.adaptive` handles HLS segment-based seeking
 correctly.
 
+Worth knowing *why*, because it is not a heuristic. ISA's playlist parser
+(`src/parser/HLSTree.cpp:592`, checked at 21.5.19-Omega) handles the tag like
+this:
+
+```cpp
+else if (tagName == "#EXT-X-PLAYLIST-TYPE")
+{
+  if (STRING::CompareNoCase(tagValue, "VOD"))
+  {
+    m_isLive = false;
+    m_updateInterval = NO_VALUE;
+  }
+}
+```
+
+**`EVENT` is not handled at all.** Only `VOD` — or an `EXT-X-ENDLIST` — flips a
+stream out of live. So an EVENT playlist is live by omission, and there is no
+property that overrides it.
+
+### Live streams start behind the playlist head
+
+For a live stream, ISA starts `liveDelay` behind the **head of the playlist**, not
+at the beginning of the content. On a stream whose transcode has only just started
+publishing, the head is short, so playback lands tens of seconds in — and that has
+nothing to do with the content's real length.
+
+```
+inputstream.adaptive.play_timeshift_buffer=true
+```
+
+starts from segment 0 instead. That property is the fix for "it starts 30 seconds
+in", and it is easy to mistake for a seek problem.
+
+### `manifest_type` is deprecated
+
+`inputstream.adaptive.manifest_type` is redundant once the MIME type selects the
+format, and ISA logs a deprecation warning for it
+(`src/CompKodiProps.cpp:42`, marked *"to be removed on next Kodi release"*). Drop
+it from any property set you are copying from an older example.
+
 Jellyfin's remuxed HLS is exactly that shape, so recordings played through it
 need adaptive. Bump `MinSegments` to 3.
 

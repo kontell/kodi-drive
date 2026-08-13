@@ -109,15 +109,68 @@ what hands the audio decoder the wrong codec.
 ## inputstream.adaptive clamps live seeks with no retry
 
 **Status: `unreported`.**
-**Severity:** resume on in-progress recordings silently starts at zero.
+**Severity:** resume on a live or in-progress stream silently starts at zero.
 
-ISA clamps a seek to `GetMediaDurationMs()/1000 - m_liveDelay` and has **no
-deferred or retry-seek mechanism**. A resume seek fired at open — when only ~48
-seconds of playlist exists — collapses to zero and is never re-applied once more
-of the stream is available.
+`src/Session.cpp:1239` (checked at 21.5.19-Omega):
+
+```cpp
+maxSeek = (static_cast<double>(maxTime) / 1000) - m_adaptiveTree->m_liveDelay;
+if (maxSeek < 0)
+  maxSeek = 0;
+if (seekTime > maxSeek)
+  seekTime = maxSeek;
+```
+
+The clamp is applied **once, at open**, and there is **no deferred or retry-seek
+mechanism**. A resume seek fired when only a few seconds of playlist exists
+therefore collapses to zero and is never re-applied as the playlist grows.
 
 `play_timeshift_buffer` does not help: it affects the *start* position, not the
 clamp.
+
+---
+
+## inputstream.adaptive mis-parses HEVC extradata from MPEG-TS
+
+**Status: `unreported`** — fixed in a fork, not upstreamed.
+**Affects:** HEVC in TS-segmented HLS. **Severity:** no video at all on Android.
+
+ISA's bundled MPEG-TS parser (`lib/mpegts/mpegts/ES_hevc.cpp`) rebuilds VPS/SPS/PPS
+extradata assuming **4-byte start codes** — a hardcoded `buf_ptr - 4` plus an
+over-counted length. Annex-B permits 3-byte start codes too, and those produce a
+stray leading byte and a truncated PPS. The H.264 path in the same library does
+the reconstruction correctly.
+
+**Where it actually bites is platform-specific, which is what makes it confusing:**
+
+| Platform | Effect |
+|---|---|
+| **Android (MediaCodec)** | **Fatal.** Kodi's `CBitstreamConverter` is configured from the extradata, mis-detects it as hvcC via the stray byte, fails to convert every Annex-B packet, and the decoder never receives a keyframe. |
+| **Linux, software decode** | **Tolerated.** The decoder recovers VPS/SPS/PPS in-band from the Annex-B TS. Turning hardware acceleration off plays video even unpatched. |
+| **Linux, VAAPI** | Blocked by a **separate** Kodi bug — see below. |
+
+The diagnostic signature is *"no video on inputstream.adaptive, but
+inputstream.ffmpegdirect plays it"* for an HEVC TS stream.
+
+**VP9 and AV1 are unaffected**: they are never demuxed from MPEG-TS, arriving via
+fMP4 or WebM with container-derived extradata.
+
+---
+
+## VAAPI allocated 8-bit surfaces for 10-bit content — fixed in Kodi 22
+
+**Status: `merged`** — [xbmc/xbmc#28103](https://github.com/xbmc/xbmc/pull/28103),
+merged 2026-04-07, *"VAAPI: fix 10-bit surface format for HEVC/VP9/AV1 via
+inputstream addons"*.
+**Affects:** Kodi 21 and earlier, on Linux with VAAPI.
+
+Kodi allocated NV12 (8-bit) instead of P010 for Main10 content arriving through an
+inputstream add-on, producing `vaEndPicture error 18` per frame.
+
+Worth knowing because it **stacks** with the entry above. Getting Main10 HEVC-in-TS
+working on Linux/VAAPI needed *both* fixes: with a patched ISA on Kodi 21, the
+extradata error disappeared and left only `vaEndPicture error 18`, once per frame.
+If you fix one and still have no picture, you may be looking at the other.
 
 ---
 

@@ -34,3 +34,7 @@ venv/
 *~
 .idea/
 .vscode/
+
+# Harvest reports live outside the repo (dev/notes/kodi-drive-harvest/).
+# They are working input, not published content.
+docs/harvest-*.md

@@ -481,7 +481,11 @@ slugs, so the plan also consolidates each add-on's memories into its current slu
 
 ---
 
-## Second machine — surveyed 2026-08-13, `docs/harvest-devbox.md`
+## Second machine — surveyed 2026-08-13
+
+*The survey report and the brief that produced it are working input rather than published
+content, so they are kept outside the repo at `dev/notes/kodi-drive-harvest/`. Everything
+of lasting value from them is in the skills.*
 
 **Correction to this section's premise.** It assumed the dev and reference trees were machine-local to the
 server. They are not — they *are* the exported tree, so both machines have been reading the same files all
@@ -528,7 +532,7 @@ live OAuth token; putting that on the wire for a one-off harvest is a bad trade.
 
 Instead: **run a Claude Code session on `<DEVBOX>` directly.** The kodi-drive repo is already visible from
 both machines over the existing NFS mount, so that session can write its harvest straight into the shared
-tree — `docs/harvest-devbox.md` — and this machine picks it up with no extra plumbing at all. That is the
+tree, and this machine picks it up with no extra plumbing at all. That is the
 whole handoff.
 
 Give it the same brief used for this survey: inventory `~/.claude/` (skills, memory dirs, settings,
@@ -547,7 +551,7 @@ the transcripts, which are large and where several of the best findings on this 
 |---|---|
 | **0** | ✅ Global gitignore hardened; pvr.kofin history audited (key was public in f2d1e98 since 2026-03-29, now rotated). Outstanding: Audiobookshelf JWT, test-user password. |
 | **1** | ✅ Repo skeleton, validate.py, scrub.py, CI, templates, plugin manifests. |
-| **1b** | ✅ **Done** — `docs/harvest-devbox.md`. Overturned the machine-local premise, closed the phase 2 blocker, and caught two wrong claims in `kodi-pvr-addon`. |
+| **1b** | ✅ **Done.** Overturned the machine-local premise, closed the phase 2 blocker, and caught two wrong claims in `kodi-pvr-addon`. |
 | **2** | ✅ Five helpers vendored + kodi-discover added, all live-verified. Reconciliation closed — `<DEVBOX>` never had them. |
 | **3** | ✅ Split into kodi-connect, kodi-jsonrpc, kodi-builtins (folded into kodi-remote), kodi-adb, kodi-ui-navigation, kodi-screenshot-review, kodi-addon-driving. |
 | **4** | 🔶 **Mostly done for generic knowledge.** 30 skills cover the freeze/perf/announcement investigations, the full Python and binary add-on surfaces, skinning, databases, artwork, release and upstream contribution. Remaining: 6 Jellyfin-specific notes → `adjacent/`, 33 kofin docs and 7 CLAUDE.md files (mostly add-on-specific → `addons/`), 90 memory notes (largely already superseded by the skills above — audit rather than harvest). |

@@ -1,0 +1,14 @@
+{
+  "name": "kodi-drive",
+  "owner": {
+    "name": "kontell",
+    "url": "https://github.com/kontell"
+  },
+  "plugins": [
+    {
+      "name": "kodi-drive",
+      "source": "./",
+      "description": "Hard-won Kodi knowledge for coding agents: debugging procedure, live-testing loops, JSON-RPC and ADB technique, log signatures, skin engine rules, and add-on development patterns."
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+# Local redaction mapping — contains the private strings it maps FROM.
+# Never commit this.
+.scrub-map.local
+
+# Anything that looks like harvested evidence. These are how private data gets
+# into a repo by accident: a log or a bugreport pasted in "just to check something".
+*.log
+*.log.old
+kodi.log*
+kodi_crashlog*
+br.zip
+bugreport*
+*.tombstone
+logcat*.txt
+
+# Local agent state
+.claude/settings.local.json
+
+# Environments and secrets
+.env
+*.env
+!targets.env.example
+targets.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editors and OS
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/

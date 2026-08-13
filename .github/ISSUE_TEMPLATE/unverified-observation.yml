@@ -1,0 +1,64 @@
+name: Unverified observation
+description: Something you saw but could not confirm. This is a real contribution — file it here rather than guessing in a skill.
+title: "[observation] "
+labels: ["unverified"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing this rather than writing it into a skill.
+
+        Skills are trusted absolutely by every agent that reads them, so anything short of verified
+        belongs here instead. An observation that someone else can reproduce later is worth a lot.
+
+        **Before you paste anything: log excerpts carry credentials.** Kodi core and
+        `inputstream.adaptive` write full stream URLs — `api_key=`, `token=` and all — to `kodi.log` at
+        debug level. Redact hostnames, IPs, keys, and usernames first.
+
+  - type: textarea
+    id: observation
+    attributes:
+      label: What you observed
+      description: The behaviour itself. Be specific about what you did and what happened.
+      placeholder: |
+        Setting <thing> on Kodi 21.3 appeared to cause <behaviour>, but only after a full restart —
+        an add-on bounce was not enough.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: What you have
+      description: Commands, output, log lines, source references. Redacted. Partial is fine — that is the point of this template.
+      render: text
+    validations:
+      required: false
+
+  - type: input
+    id: versions
+    attributes:
+      label: Kodi version(s) and platform(s)
+      description: Only what you actually ran on.
+      placeholder: "21.3 Omega on Linux x86_64"
+    validations:
+      required: true
+
+  - type: textarea
+    id: blocker
+    attributes:
+      label: Why you could not confirm it
+      description: Could not reproduce? No access to another version? Ran out of time? All valid answers.
+    validations:
+      required: true
+
+  - type: textarea
+    id: settle
+    attributes:
+      label: What would settle it
+      description: The experiment that would turn this into a verified finding. This is the most useful field here — it tells the next person exactly what to do.
+      placeholder: |
+        Run the same steps on 22.0 Piers and check whether the restart is still required.
+        If it is, grep CGUIWindowManager for the cache invalidation path.
+    validations:
+      required: true

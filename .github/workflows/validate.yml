@@ -1,0 +1,93 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  skills:
+    name: skill schema and confidence bar
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate skills
+        run: python3 scripts/validate.py
+
+  privacy:
+    name: privacy scan
+    runs-on: ubuntu-24.04
+    steps:
+      # gitleaks needs history to scan commits, not just the working tree.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Scan for hostnames, addresses, and credentials
+        run: python3 scripts/scrub.py --detect
+
+      # An independent second pass. scrub.py knows this project's shapes;
+      # gitleaks knows the wider catalogue of credential formats. Neither is
+      # a superset of the other, so both run.
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  plugin:
+    name: plugin manifest
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Manifests are valid JSON
+        run: |
+          python3 -m json.tool .claude-plugin/plugin.json > /dev/null
+          python3 -m json.tool .claude-plugin/marketplace.json > /dev/null
+
+      - name: Declared skill directories exist
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib, sys
+          manifest = json.loads(pathlib.Path(".claude-plugin/plugin.json").read_text())
+          missing = [d for d in manifest.get("skills", [])
+                     if not pathlib.Path(d).is_dir()]
+          if missing:
+              sys.exit(f"plugin.json declares missing directories: {missing}")
+          print("skill directories OK")
+          PY
+
+  shell:
+    name: shellcheck
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      # bin/ lands on the PATH of every agent that installs this plugin, so a
+      # quoting bug here becomes a quoting bug in somebody else's session.
+      - name: Check bin/ and scripts/
+        run: |
+          shopt -s nullglob
+          files=(bin/* scripts/*.sh)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "no shell scripts yet"
+            exit 0
+          fi
+          shellcheck -S warning "${files[@]}"

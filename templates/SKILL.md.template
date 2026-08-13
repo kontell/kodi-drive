@@ -1,0 +1,61 @@
+---
+name: SKILL_NAME
+description: >
+  One sentence on what this covers, then one on when to reach for it. The trigger
+  matters more than the topic — an agent matches on "when", not "what". This is the
+  only part loaded before the agent decides to open the skill, so make it earn that.
+license: CC-BY-SA-4.0
+metadata:
+  verified:
+    kodi: ["21.3 Omega"]
+    platform: ["Linux x86_64"]
+    date: "YYYY-MM-DD"
+    method: observed
+---
+
+# Title
+
+One paragraph: what breaks, or what you are trying to do, and why the obvious approach
+does not work. Lead with the consequence, not the mechanism — a reader who recognises
+their symptom here will keep reading.
+
+## The thing itself
+
+State behaviour, then consequence:
+
+> A malformed include is dropped silently — Kodi logs a parse error and renders the
+> window without it, so a missing element is a parse failure until proven otherwise.
+
+Give commands, not descriptions of commands:
+
+```sh
+kodi-remote get Application.GetProperties version
+```
+
+Include measurements if you have them. "0.62 s → 0.17 s" is checkable; "faster" is not.
+
+Name versions wherever behaviour diverges. "Omega refuses, Piers sniffs" is the useful
+form; "depends on your version" is not.
+
+## What fails silently
+
+The highest-value section in most skills. An agent can discover a loud failure by
+running into it. A silent one it will never find, and will build on top of.
+
+## Verifying it
+
+How a reader confirms this themselves in under a minute. If there is a one-liner that
+proves the behaviour, put it here — it makes the skill self-checking as Kodi changes.
+
+## Open questions
+
+Anything you could not confirm. Content under this heading is exempt from the hedge
+lint, so this is where uncertainty belongs — say plainly what you do not know and what
+would settle it.
+
+Delete this section if there is nothing in it.
+
+## See also
+
+- [`related-skill`](../related-skill/SKILL.md) — one clause on why a reader would go there
+- [Kodi wiki: Page](https://kodi.wiki/view/Page) — link rather than restate

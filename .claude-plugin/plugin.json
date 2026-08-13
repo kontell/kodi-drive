@@ -1,0 +1,15 @@
+{
+  "name": "kodi-drive",
+  "displayName": "Kodi Drive",
+  "description": "Hard-won Kodi knowledge for coding agents: debugging procedure, live-testing loops, JSON-RPC and ADB technique, log signatures, skin engine rules, and add-on development patterns.",
+  "version": "0.1.0",
+  "author": {
+    "name": "kontell",
+    "url": "https://github.com/kontell"
+  },
+  "homepage": "https://github.com/kontell/kodi-drive",
+  "repository": "https://github.com/kontell/kodi-drive",
+  "license": "CC-BY-SA-4.0",
+  "keywords": ["kodi", "xbmc", "addon", "skin", "jsonrpc", "debugging", "android-tv"],
+  "skills": ["./skills/", "./addons/", "./adjacent/"]
+}

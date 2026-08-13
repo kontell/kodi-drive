@@ -1,0 +1,55 @@
+# Licences
+
+kodi-drive is dual-licensed, split by what a file is for.
+
+## Prose, documentation, and skills — CC BY-SA 4.0
+
+`SPDX-License-Identifier: CC-BY-SA-4.0`
+
+Applies to: `README.md`, `CONTRIBUTING.md`, everything under `skills/`, `addons/`,
+`adjacent/`, `docs/`, and `templates/`.
+
+Copyright (c) kodi-drive contributors.
+
+Licensed under the Creative Commons Attribution-ShareAlike 4.0 International Licence.
+Full text: <https://creativecommons.org/licenses/by-sa/4.0/legalcode>
+Summary: <https://creativecommons.org/licenses/by-sa/4.0/>
+
+You may share and adapt this material for any purpose, including commercially, provided
+you give appropriate credit and distribute your contributions under the same licence.
+
+CC BY-SA 4.0 was chosen so that material may be quoted to and from the
+[Kodi wiki](https://kodi.wiki), which is licensed under the same terms.
+
+## Scripts — GPL-2.0-or-later
+
+`SPDX-License-Identifier: GPL-2.0-or-later`
+
+Applies to: everything under `bin/` and `scripts/`.
+
+Copyright (c) kodi-drive contributors.
+
+This program is free software; you can redistribute it and/or modify it under the terms
+of the GNU General Public License as published by the Free Software Foundation; either
+version 2 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+Full text: <https://www.gnu.org/licenses/old-licenses/gpl-2.0.html>
+
+GPL-2.0-or-later matches Kodi's own licensing, so these scripts can be adapted into Kodi
+add-ons and tooling without a licence conflict.
+
+## Contributing
+
+By opening a pull request you agree that your contribution ships under the licence
+covering the files you touched. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## What this repo does not cover
+
+kodi-drive links to, but does not copy, material from the Kodi wiki, the Kodi source, and
+third-party projects. Those retain their own licences. In particular
+[`xbmc/kodiai`](https://github.com/xbmc/kodiai) is proprietary and all rights are reserved
+by its owner — nothing here is derived from it.

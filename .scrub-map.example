@@ -1,0 +1,37 @@
+# Redaction map for `scripts/scrub.py --redact`.
+#
+# Copy to `.scrub-map.local` and fill in. That file is gitignored, because it
+# necessarily contains the private strings it maps FROM.
+#
+# Format: <private string><TAB><placeholder>
+# Longest matches are applied first, so a full hostname is replaced before any
+# bare domain inside it.
+#
+# Use STABLE placeholders. The same host must become the same placeholder in
+# every file, or migrated prose stops making sense — "connect to <HOST_1> then
+# check <HOST_2>" is only readable if those are consistently the same machines.
+
+# --- hosts and addresses -------------------------------------------------
+# media.example-personal.xyz	<JELLYFIN_HOST>
+# books.example-personal.xyz	<AUDIOBOOKSHELF_HOST>
+# 10.13.37.20	<KODI_HOST>
+# 10.13.37.21	<ANDROID_TV_HOST>
+# 10.13.37.22	<DEVBOX_HOST>
+
+# --- identity ------------------------------------------------------------
+# /home/realname	/home/<user>
+# realname	<user>
+# realname@example.com	<email>
+
+# --- devices -------------------------------------------------------------
+# SOME_TV_MODEL_ID	<ANDROID_TV_MODEL>
+# 10.13.37.21:44803	<ADB_SERIAL>
+
+# --- credentials ---------------------------------------------------------
+# Prefer rotating over redacting. A key that has been in a file an agent read
+# should be treated as compromised regardless of what this map does to it.
+# 0123456789abcdef0123456789abcdef	<API_KEY>
+# 00000000-0000-0000-0000-000000000000	<USER_ID>
+
+# --- shares --------------------------------------------------------------
+# smb://somehost/somemedia	<SHARE>

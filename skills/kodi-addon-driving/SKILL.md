@@ -42,10 +42,14 @@ Test a plugin's directory listing without the UI at all:
 kodi-remote get Files.GetDirectory '{"directory":"plugin://<id>/?mode=list"}'
 ```
 
-**This does not extend to `library://` node paths.** `Files.GetDirectory` has
-returned 0 items for library nodes that render perfectly in the UI — measured,
-including on control cases. For nodes, navigate and screenshot; the rendered
-listing is the ground truth JSON-RPC cannot give you.
+Root listings of `library://music/` and `library://video/` return the same
+items the home categories widget draws. Use that when the widget is missing
+defaults — see [`kodi-library-nodes`](../kodi-library-nodes/SKILL.md).
+
+A previous session saw `Files.GetDirectory` return 0 items for some
+`library://` paths that still rendered in the UI. That case has not been
+re-found; if you get an empty listing, screenshot before concluding the
+path is empty.
 
 You can at least skip the stepping. `GUI.ActivateWindow` takes a node path
 directly, landing on it in one call:
@@ -131,15 +135,17 @@ timeout rather than an instant refusal, which is what a real outage looks like.
 ## What fails silently
 
 - A new add-on registers disabled; nothing tells you it did not start.
-- `Files.GetDirectory` returns 0 items for library nodes that render fine.
+- `Files.GetDirectory` on a `library://` path whose node is not in the
+  active profile tree returns `Invalid params.`, not the shipped file.
 - A `NotifyAll` sender mismatch returns `"OK"` and does nothing.
 - An action route logs a `GetDirectory` failure even when it succeeded.
 - `SetAddonEnabled` acts on the loaded profile, not the one you meant.
 
 ## Open questions
 
-- Why `Files.GetDirectory` returns nothing for `library://` paths that render
-  correctly has not been traced to a cause — only the behaviour is established.
+- Why an earlier session saw `Files.GetDirectory` return 0 items for
+  `library://` paths that still rendered has not been re-found. Root
+  listings and one in-tree filter node returned items on 21.3.
 - Whether the disable/edit/enable settings cycle is still required on Kodi 22,
   or whether the in-memory copy is flushed more eagerly there, is untested.
 
@@ -148,3 +154,5 @@ timeout rather than an instant refusal, which is what a real outage looks like.
 - [`kodi-profiles`](../kodi-profiles/SKILL.md) — which profile a change lands in
 - [`kodi-jsonrpc`](../kodi-jsonrpc/SKILL.md) — asserting the result
 - [`kodi-logs`](../kodi-logs/SKILL.md) — reading what the route actually did
+- [`kodi-library-nodes`](../kodi-library-nodes/SKILL.md) — why a `library://`
+  listing can be missing the shipped defaults

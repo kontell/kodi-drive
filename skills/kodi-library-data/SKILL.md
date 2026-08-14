@@ -122,3 +122,5 @@ Only touch a profile that is not currently open.
 - [`kodi-profiles`](../kodi-profiles/SKILL.md) — per-profile scope and its traps
 - [`kodi-process-control`](../kodi-process-control/SKILL.md) — stopping Kodi
   cleanly before reading its databases
+- [`kodi-library-nodes`](../kodi-library-nodes/SKILL.md) — the `library://`
+  XML trees, which are not these databases

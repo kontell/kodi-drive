@@ -109,6 +109,7 @@ definition and little else.
 | A Python API's real behaviour | `xbmc/interfaces/legacy/` (SWIG-bound) |
 | An add-on manifest field | `xbmc/addons/addoninfo/AddonInfoBuilder.cpp` |
 | The library schema | `xbmc/video/VideoDatabase.h`, `xbmc/music/MusicDatabase.h`, both on `CDatabase` |
+| Where `library://` nodes come from | `CLibraryDirectory::GetNode` |
 | Who is told about an event | `xbmc/interfaces/AnnouncementManager.cpp`, `IAnnouncer.h` |
 
 ## `Application.cpp` is decomposed, so search the siblings

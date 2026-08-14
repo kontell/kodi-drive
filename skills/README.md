@@ -105,6 +105,13 @@ See [`../README.md`](../README.md) for how to install and use these, and
 
 - [`jellyfin-client`](../adjacent/jellyfin-client/SKILL.md) — Write a Kodi add-on that talks to a Jellyfin or Emby server without losing sync state or playing the wrong stream.
 
+## Working with this repo
+
+*Contributing what a session learned, and keeping the repo from silting up.*
+
+- [`audit`](audit/SKILL.md) — Sweep kodi-drive for the decay that per-PR checks cannot catch — duplicate coverage, claims verified against a Kodi nobody runs any more, skills nothing links to, and defects recorded but never filed upstream.
+- [`contribute`](contribute/SKILL.md) — Turn what this session learned into a kodi-drive pull request, or into an issue when the evidence does not reach the bar.
+
 <!-- END SKILL INDEX -->
 
 Add-on-specific knowledge lives in [`../addons/`](../addons/); knowledge about

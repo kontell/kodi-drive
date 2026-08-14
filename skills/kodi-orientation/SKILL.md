@@ -107,7 +107,8 @@ prevent.
 [`kodi-addon-lifecycle`](../kodi-addon-lifecycle/SKILL.md) ·
 [`kodi-announcements`](../kodi-announcements/SKILL.md) ·
 [`kodi-addon-driving`](../kodi-addon-driving/SKILL.md) ·
-[`kodi-performance`](../kodi-performance/SKILL.md)
+[`kodi-performance`](../kodi-performance/SKILL.md) ·
+[`kodi-idle-screensaver`](../kodi-idle-screensaver/SKILL.md)
 
 **Skinning**
 [`kodi-skin-xml`](../kodi-skin-xml/SKILL.md) ·
@@ -128,6 +129,13 @@ prevent.
 [`kodi-versions-abi`](../kodi-versions-abi/SKILL.md) ·
 [`kodi-addon-release`](../kodi-addon-release/SKILL.md) ·
 [`kodi-contributing`](../kodi-contributing/SKILL.md)
+
+**Adjacent systems**
+[`jellyfin-client`](../../adjacent/jellyfin-client/SKILL.md)
+
+**Working with this repo**
+[`contribute`](../contribute/SKILL.md) ·
+[`audit`](../audit/SKILL.md)
 
 ## Things that surprise people coming from other software
 
@@ -151,6 +159,10 @@ prevent.
 If you learned something general — how Kodi behaves, what breaks, what a log line
 means — **it belongs in this repo, not in the project's `CLAUDE.md` or your
 memory.** That is how it gets rediscovered ten times instead of once.
+
+**Run [`contribute`](../contribute/SKILL.md).** It walks the whole loop, and its
+first step is deciding whether there is anything to contribute — which for most
+sessions there is not.
 
 The bar is verification, not certainty: if you ran it, contribute a skill; if you
 only saw it, open an issue. Both are wanted. See

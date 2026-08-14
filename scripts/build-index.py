@@ -57,6 +57,8 @@ CATEGORIES = [
      "Versions, releases, and getting a change accepted upstream."),
     ("adjacent", "Adjacent systems",
      "Not Kodi, but things Kodi add-ons routinely talk to."),
+    ("workflow", "Working with this repo",
+     "Contributing what a session learned, and keeping the repo from silting up."),
 ]
 
 FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n", re.DOTALL)

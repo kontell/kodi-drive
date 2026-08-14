@@ -119,6 +119,17 @@ why this is not an edit to one of them.** If you cannot name three, you have not
 grep -ril "<the key term>" skills/ addons/ adjacent/
 ```
 
+Once you have a draft, check it mechanically. `overlap.py` fingerprints each skill by the identifiers in
+its body and reports the ones sharing distinctive symbols with yours:
+
+```sh
+python3 scripts/overlap.py --against skills/<your-skill>/SKILL.md
+```
+
+CI runs the same check on every PR and writes the result to the job summary. It never fails the build —
+overlap is a question, not a defect. [`/kodi-drive:audit`](skills/audit/SKILL.md) covers how to read one,
+and runs the repo-wide sweep.
+
 Editing an existing skill is the better contribution more often than people expect. A skill that gains a
 verified caveat is more valuable than a new skill that restates it in a different order.
 
@@ -221,7 +232,7 @@ Branch, commit, open a PR against `main`. The
 tick it.** An empty evidence block is the signal that a claim is not ready, and it is visible to a
 reviewer in a way an unticked box is not.
 
-For agents finishing a session, `/kodi-drive:contribute` does the whole flow: collects what was learned,
+For agents finishing a session, [`/kodi-drive:contribute`](skills/contribute/SKILL.md) does the whole flow: collects what was learned,
 checks it for overlap against existing skills, scrubs it, and opens the PR with evidence filled from the
 actual session.
 

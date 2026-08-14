@@ -182,7 +182,17 @@ def code_block_lines(lines: list[str], offset: int) -> set[int]:
 VALID_CATEGORIES = {
     "orientation", "access", "diagnosis", "playback", "python-addon",
     "binary-addon", "skinning", "kodi-data", "shipping", "adjacent",
+    "workflow",
 }
+
+# `workflow` skills are about operating this repo — contributing, auditing — not
+# about Kodi. They make no version- or platform-dependent claim, so demanding
+# `verified-kodi: "21.3 Omega"` from one would force a contributor to state
+# something untrue in the exact field this repo exists to keep honest.
+#
+# `verified-date` and `verified-method` still apply: the procedure was run, on a
+# day, and that is worth recording.
+NO_KODI_CLAIM = {"workflow"}
 
 
 def check_verified(meta: dict, path: Path, f: Findings) -> None:
@@ -219,10 +229,13 @@ def check_verified(meta: dict, path: Path, f: Findings) -> None:
         if k.startswith("verified-") and isinstance(v, str)
     }
 
+    claims_kodi = category not in NO_KODI_CLAIM
+
     kodi = [x.strip() for x in verified.get("kodi", "").split(",") if x.strip()]
     if not kodi:
-        f.error(path, None, "`metadata.verified-kodi` is required — list the versions "
-                            "you actually tested, not a range")
+        if claims_kodi:
+            f.error(path, None, "`metadata.verified-kodi` is required — list the versions "
+                                "you actually tested, not a range")
     else:
         for v in kodi:
             major = re.match(r"^(\d+)", str(v))
@@ -238,7 +251,7 @@ def check_verified(meta: dict, path: Path, f: Findings) -> None:
             f.warn(path, None, f"not verified against current stable Kodi "
                                f"{CURRENT_STABLE_MAJOR} ({KNOWN_KODI[CURRENT_STABLE_MAJOR]})")
 
-    if not verified.get("platform"):
+    if not verified.get("platform") and claims_kodi:
         f.error(path, None, "`metadata.verified-platform` is required — Kodi behaviour "
                             "genuinely diverges across platforms")
 

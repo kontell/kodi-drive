@@ -58,16 +58,19 @@ printed, and they are not scrubbed.
 > paths. Everything else — how Kodi behaves, what breaks, what the log line means — is knowledge the next
 > person needs too, and hoarding it locally is how it gets rediscovered ten times.
 
-When a session teaches you something general, contribute it back before you finish. See
-[CONTRIBUTING.md](CONTRIBUTING.md) — but note the bar: **only findings you actually verified.** If you did
-not run it, open an issue instead of a pull request. That is a genuinely useful contribution, not a
-consolation prize.
+When a session teaches you something general, contribute it back before you finish. Run
+[`/kodi-drive:contribute`](skills/contribute/SKILL.md) and it walks the whole loop — deciding whether there
+is anything to contribute at all, checking it is not already here, scrubbing it, and opening the PR.
+
+Note the bar: **only findings you actually verified.** If you did not run it, open an issue instead of a
+pull request. That is a genuinely useful contribution, not a consolation prize. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
 ## What is in here
 
-**[Browse the catalogue →](skills/README.md)** — 39 skills, grouped by what you
+**[Browse the catalogue →](skills/README.md)** — 44 skills, grouped by what you
 are doing.
 
 You do not have to read it, and neither does an agent. The [Agent Skills

@@ -558,7 +558,7 @@ the transcripts, which are large and where several of the best findings on this 
 | **5** | ✅ kodi-triage, kodi-logs, kodi-clean-profile, kodi-test-rig, kodi-process-control, kodi-profiles, kodi-library-data. Repo still **private** — flip after phase 4 scrubbing. |
 | **6** | ✅ **Done.** kodi-source-map and kodi-architecture, both `sourced` tier, every cited claim re-verified against the 21.3 tree. Per-subsystem skills remain deferred until real work demands them. |
 | **7** | ✅ **Done.** Six source repos stripped and pushed — `plugin.video.kofin` lost 70% of its words, `pvr.kofin` 62% and its credential block. Pointer stanza installed in all six. Memories consolidated on both machines: 12→2 slugs here, 19→2 on the server, 36 superseded notes retired to pointers. |
-| **8** | ⬜ /kodi-drive:contribute + /kodi-drive:audit; announce. File the seven unreported upstream defects. |
+| **8** | 🔶 **Skills done.** `contribute` and `audit` written, plus `scripts/overlap.py` (identifier fingerprint + IDF) and an informational PR overlap check in CI. New `workflow` category, exempt from the Kodi-version metadata because these skills make no Kodi claim. Remaining: file the seven unreported upstream defects; announce; flip the repo public. |
 
 ## Verification
 

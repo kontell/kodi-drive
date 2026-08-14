@@ -14,7 +14,10 @@ jobs:
     name: skill schema and confidence bar
     runs-on: ubuntu-24.04
     steps:
+      # Full history: the overlap step below diffs against the PR base.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -27,6 +30,30 @@ jobs:
       # would leave the two disagreeing.
       - name: Catalogue is up to date
         run: python3 scripts/build-index.py --check
+
+      # Duplication is invisible to every other check — two skills half-covering
+      # one topic both validate and both scrub clean.
+      #
+      # Informational by design. A high score is a question ("is this duplication
+      # or a cross-reference?"), and a check that fails on a question teaches
+      # contributors to route around it. The table goes to the job summary, which
+      # is visible on the PR without needing write permission, and so works for
+      # pull requests from forks.
+      - name: Overlap with existing skills
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          base="origin/${{ github.base_ref }}"
+          mapfile -t changed < <(
+            git diff --name-only --diff-filter=d "$base...HEAD" -- '*/SKILL.md'
+          )
+          if [ ${#changed[@]} -eq 0 ]; then
+            echo "No skills changed in this PR." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          printf 'checking overlap for: %s\n' "${changed[@]}"
+          python3 scripts/overlap.py --against "${changed[@]}" --markdown --top 10 \
+            >> "$GITHUB_STEP_SUMMARY"
 
   privacy:
     name: privacy scan

@@ -3,15 +3,17 @@ name: kodi-playback-resume
 description: >
   Hand Kodi an item so the right player opens it, in the right window, at the
   right position. Use when an add-on's playback starts at zero instead of
-  resuming, when the wrong info dialog opens, when the fullscreen window is
-  unexpected, or when subtitle tracks are off by a few. Covers the resume property
-  that differs per player core and the flag that silently downgrades itself.
+  resuming, when the wrong info dialog opens, when Now Playing names a different
+  song than the one you hear, when the fullscreen window is unexpected, or when
+  subtitle tracks are off by a few. Covers the resume property that differs per
+  player core, the path-vs-dbid split on a music ListItem, and the flag that
+  silently downgrades itself.
 license: CC-BY-SA-4.0
 metadata:
   category: playback
   verified-kodi: "21.3 Omega"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-date: "2026-08-14"
   verified-method: "observed"
 ---
 
@@ -29,6 +31,38 @@ opens `DialogVideoInfo` for an item carrying only music tags.
 
 So set the info tag for the player you want, and set `<provides>` for the browse
 category you want. They are independent decisions.
+
+## The path plays; `setDbId` names the library row
+
+`xbmc.PlayList.add(path, listitem)` opens **the path**.
+`listitem.getMusicInfoTag().setDbId(n, "song")` is what `Player.GetItem` reports
+as `id`.
+
+They are independent. Observed on Kodi 21.3: a ListItem whose path was song A's
+file and whose `setDbId` was song B's id played A's URL. `Player.GetItem`
+returned `file` of A and `id` of B. Title and album on that response were the
+tags set on the ListItem, so the payload can look internally consistent while
+`id` points at a different row.
+
+Anything that keys off the library id — play counts, the info dialog, artwork
+loaded from the row, a companion add-on mapping `kodi_id` back to a server item
+— follows B. The stream is A. The symptom is "the right queue plays and Now
+Playing is a different album".
+
+A library rebuild that deletes and re-inserts songs reuses `idSong` numbers
+([`kodi-database-writing`](../kodi-database-writing/SKILL.md)). A stored
+`setDbId` then names whoever occupies that number now.
+
+**Resolve the live row before you stamp the id.** Do not persist a Kodi song id
+as identity across a wipe. Keep a stable key (the server item id in the URL, or
+the file path) and look the current row up at play time.
+
+`AudioLibrary.GetSongs` with
+`{"field":"path","operator":"contains","value":"<id-from-the-url>"}` found the
+current song. The same filter on `filename` returned **zero rows**: Kodi stores
+the directory URL in `path.strPath` and the leaf (`stream.flac?static=true`) in
+`song.strFileName`. A unique id that lives in the folder part of the URL is
+invisible to `filename`.
 
 ## The fullscreen window comes from the content, not the core
 
@@ -120,6 +154,8 @@ nothing to show.
 - A bare `plugin://` during playback aborting the new demuxer, which reads as a
   broken stream.
 - Sidecar ordering shifting every embedded subtitle index.
+- `setDbId` naming a different library row than the path being played, with no
+  error.
 
 ## Open questions
 
@@ -127,6 +163,11 @@ nothing to show.
   structural, but the number is not a constant to design against.
 - Whether `StartOffset` behaves identically for a `plugin://` path and a library
   item has not been separately confirmed.
+- Whether `MusicPlayer.*` infolabels follow the ListItem tags or the library row
+  when `setDbId` and the path disagree. `Player.GetItem` title/album followed
+  the tags; `id` followed `setDbId`. The skin now-playing banner after a
+  *matching* rebind showed the rebound row. The mismatched-id banner was not
+  screenshotted.
 
 ## See also
 
@@ -134,3 +175,5 @@ nothing to show.
   started, and why `speed: 1` does not mean playing
 - [`kodi-inputstream`](../kodi-inputstream/SKILL.md) — what happens to the stream
   after the player opens it
+- [`kodi-database-writing`](../kodi-database-writing/SKILL.md) — why a stored
+  `songid` can name a different track after a rebuild

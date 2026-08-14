@@ -3,16 +3,16 @@ name: kodi-database-writing
 description: >
   Write to Kodi's own library databases without corrupting them or wedging Kodi.
   Use when an add-on populates MyVideos or MyMusic directly, when library rows are
-  wrong or missing after a sync, or when deciding between JSON-RPC and SQLite for
-  library writes. Covers the echo loop that JSON-RPC writes cause, the free way to
-  make widgets notice a direct write, and the reserved row that turns a real
-  artist into [Missing Tag].
+  wrong or missing after a sync, when a stored songid points at a different track
+  after a rebuild, or when deciding between JSON-RPC and SQLite for library
+  writes. Covers the echo loop that JSON-RPC writes cause, the free way to make
+  widgets notice a direct write, the reserved artist row, and song-id reuse.
 license: CC-BY-SA-4.0
 metadata:
   category: kodi-data
   verified-kodi: "21.3 Omega, 22.0b1 Piers"
   verified-platform: "Linux x86_64, Android TV"
-  verified-date: "2026-08-13"
+  verified-date: "2026-08-14"
   verified-method: "observed"
 ---
 
@@ -74,6 +74,28 @@ add-on's own mapping pointed at a different row again.
 The lesson generalises: **Kodi's schema has reserved and sentinel rows.** Never
 let the database assign an id you then need to match.
 
+## `idSong` is reused
+
+`song.idSong` is `INTEGER PRIMARY KEY` with no `AUTOINCREMENT`
+(`xbmc/music/MusicDatabase.cpp` `CreateTables`, MyMusic83). There is no
+`sqlite_sequence` row for it.
+
+Delete a song and insert another, and SQLite hands the old number out again. An
+add-on that persisted `songid` 12 across a library repair then calls
+`setDbId(12)` on whoever was inserted first into that hole. The stream URL can
+still be the saved file; Now Playing and play counts follow the new row. See
+[`kodi-playback-resume`](../kodi-playback-resume/SKILL.md).
+
+A rebuild that deletes a contiguous high block and re-inserts in the same order
+can refill that hole with the **same** ids. Observed: a secondary music library
+occupying only high ids came back with those ids unchanged after delete+add.
+That looks like a clean repair and is a bad reproduction. The failure is a
+reshuffle — a newest-first walk of a large library into vacated low numbers.
+
+Do not treat a Kodi song id as identity across a wipe. Keep a stable key (a
+server item id in the URL, or the file path) and look the live row up at use
+time.
+
 ## `song_artist` is how an album's songs are reached
 
 Kodi reaches an album's songs *under an artist* through `song_artist`. A song
@@ -130,6 +152,8 @@ column-level diff will not show you.
 - A JSON-RPC library write starts an echo loop that terminates only by accident.
 - `UpdateLibrary(music)` walks the whole library and can crash Kodi.
 - A database-assigned id can collide with a reserved sentinel row.
+- `idSong` values are reused after delete+insert; a stored songid can name a
+  different track after a rebuild, with no error.
 - A missing `song_artist` row hides songs under one browse path only.
 - A partial page reads as a complete, smaller answer.
 - A half-written state file parses as an empty one.
@@ -140,6 +164,8 @@ column-level diff will not show you.
   been established from source; only its effect was measured.
 - Whether MyVideos147's data-only property holds for the final Kodi 22 release,
   rather than just the beta, is untested.
+- Whether `idMovie` / `idEpisode` are also plain `INTEGER PRIMARY KEY` (same
+  reuse) was not checked; only `idSong` on MyMusic83 was.
 
 ## See also
 
@@ -149,3 +175,5 @@ column-level diff will not show you.
   does or does not raise
 - [`kodi-performance`](../kodi-performance/SKILL.md) — why a full scan is far
   worse on a TV box
+- [`kodi-playback-resume`](../kodi-playback-resume/SKILL.md) — a stale
+  `setDbId` names the reused row while the path still plays the saved file

@@ -187,17 +187,6 @@ add-on is not piracy and is entirely welcome here.**
 
 ---
 
-## Related work
-
-[`xbmc/kodiai`](https://github.com/xbmc/kodiai) is Team Kodi's own AI integration — a GitHub App doing PR
-review and issue triage on the xbmc repos, with retrieval over Kodi's code, wiki, and issue history. It is
-complementary to this repo and covers different ground: kodiai reviews contributions *to Kodi*, while
-kodi-drive equips an agent working on *your* add-on, skin, or broken install. If you submit an add-on to
-the official repository, kodiai is what will review it — [`kodi-contributing`](skills/kodi-contributing/SKILL.md)
-covers how to pass.
-
----
-
 ## Licence
 
 Prose and skills: [CC BY-SA 4.0](LICENSE). Scripts in `bin/` and `scripts/`: GPL-2.0-or-later.

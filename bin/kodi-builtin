@@ -61,8 +61,30 @@ def packet(ptype: int, payload: bytes) -> bytes:
 
 def send_builtin(cmd: str, host: str, port: int) -> None:
     payload = bytes([ACTION_EXECBUILTIN]) + cmd.encode("utf-8") + b"\x00"
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.sendto(packet(PT_ACTION, payload), (host, port))
+    data = packet(PT_ACTION, payload)
+
+    # AF_UNSPEC rather than AF_INET: Kodi can bind the EventServer on udp6 only
+    # -- observed on 22.0b1 on Android TV, where `netstat -lun` reports
+    # `udp6 [::]:9777` and /proc/net/udp has no row for the port at all. An IPv4
+    # datagram to such an instance is discarded, and because this is
+    # fire-and-forget UDP nothing reports it: the setting reads enabled, this
+    # command exits 0, and the builtin never runs.
+    #
+    # This does not help when the sending host has no IPv6 route to the target,
+    # which is the usual case for an Android box on a v4-only LAN. There the
+    # packet has to originate on the device -- see the kodi-adb skill.
+    infos = socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_DGRAM)
+    last: OSError | None = None
+    for family, socktype, proto, _canonname, sockaddr in infos:
+        try:
+            with socket.socket(family, socktype, proto) as sock:
+                sock.sendto(data, sockaddr)
+            return
+        except OSError as exc:
+            last = exc
+    if last is not None:
+        raise last
+    raise OSError(f"no address found for {host}:{port}")
 
 
 def main() -> int:

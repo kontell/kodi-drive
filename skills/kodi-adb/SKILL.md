@@ -4,15 +4,16 @@ description: >
   Drive Kodi on Android and Android TV over ADB — screenshots, logs, installing a
   build, restarting the app, and pulling databases. Use when the Kodi you need is
   a TV box, a stick, or a phone, or when a bug only reproduces on Android. Covers
-  which local tools have no remote equivalent, why deleting files under
+  which local tools have no remote equivalent, reaching an EventServer that binds
+  IPv6 only and so ignores every builtin you send it, why deleting files under
   Android/data fails while pushing succeeds, and the shell escaping that silently
   answers zero.
 license: CC-BY-SA-4.0
 metadata:
   category: access
-  verified-kodi: "21.3 Omega"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers"
   verified-platform: "Android TV"
-  verified-date: "2026-08-13"
+  verified-date: "2026-08-15"
   verified-method: "observed"
 ---
 
@@ -20,7 +21,9 @@ metadata:
 
 Everything about *technique* transfers from a local Kodi — blind navigation,
 focus defaults, screenshot review, state over pixels. **None of the local tooling
-does.** There is no EventServer, no `~/.kodi`, and no local filesystem to reach.
+does.** There is no `~/.kodi` and no local filesystem to reach, and `kodi-builtin`
+cannot reach the EventServer from your workstation — though the EventServer
+itself is running. [Builtins over ADB](#builtins-over-adb) has the route in.
 
 Reaching for `kodi-shot` against an Android box fails with nothing to explain
 why, so establish the channel first.
@@ -49,13 +52,72 @@ Kodi's data directory on Android:
 |---|---|
 | `kodi-shot` | `adb -s $D exec-out screencap -p > shot.png` — full resolution, downscale with `magick` before reading |
 | `kodi-remote up/down/ok` | JSON-RPC `Input.Up` / `Input.Down` / `Input.Select` / `Input.Back` / `Input.ContextMenu` |
-| `kodi-builtin '...'` | **no equivalent** — no EventServer. Use `Addons.ExecuteAddon` and `GUI.ActivateWindow` |
+| `kodi-builtin '...'` | send the packet from the device to its own `::1` — see [Builtins over ADB](#builtins-over-adb) |
 | `kodi-logtail` | `adb -s $D shell "grep ... $K/temp/kodi.log"` |
 | `~/.kodi/userdata` | `$K/userdata` — `adb pull`, and **take the `-wal`** |
 | `RestartApp()` | `am force-stop` then `monkey -p org.xbmc.kodi -c android.intent.category.LAUNCHER 1` |
 
 JSON-RPC works the same as locally once the web server is on, so most of
 [`kodi-jsonrpc`](../kodi-jsonrpc/SKILL.md) applies unchanged.
+
+## Builtins over ADB
+
+Android Kodi runs the EventServer. What fails is delivery: it binds **`udp6`
+only**, and `kodi-builtin` sent from `AF_INET`. The datagram is discarded by the
+kernel, and because this is fire-and-forget UDP nothing anywhere reports it —
+`services.esenabled` reads `True`, the command exits 0, and the builtin never
+runs. That symptom is indistinguishable from the EventServer being absent, which
+is what this skill used to claim it was.
+
+Check which stack it is on from the device rather than inferring it from a
+builtin that did nothing:
+
+```sh
+adb -s $D shell 'netstat -lun' | grep 9777
+#   udp6  0  0  [::]:9777  [::]:*     <- v6 only; an IPv4 packet is discarded
+```
+
+`netstat -lun` lists both stacks, so a plain `udp` row means IPv4 is bound too.
+
+`bin/kodi-builtin` now resolves with `AF_UNSPEC`, so it reaches a v6-only
+EventServer whenever the workstation has an IPv6 route to the device. On a
+v4-only LAN it has none, and there is nothing to configure — the packet has to
+originate on the device:
+
+```sh
+b64=$(python3 - "$BUILTIN" <<'PY'
+import base64, struct, sys
+payload = bytes([0x01]) + sys.argv[1].encode() + b"\x00"          # EXECBUILTIN
+print(base64.b64encode(
+    b"XBMC" + bytes([2, 0]) + struct.pack(">H", 0x0A)             # PT_ACTION
+    + struct.pack(">I", 1) + struct.pack(">I", 1)
+    + struct.pack(">H", len(payload)) + struct.pack(">I", 0xC0DE0001)
+    + b"\x00" * 10 + payload).decode())
+PY
+)
+adb -s $D shell "echo $b64 | base64 -d | timeout 1 nc -u -6 ::1 9777"
+```
+
+**`nc` does not exit after a UDP send**, so bound it *on the device* with
+`timeout`. Without that the `adb shell` hangs indefinitely, long after the
+builtin has already run — and killing the local `adb` does not retract it.
+
+Worth the trouble because builtins are the only route to `SetProperty`,
+`ClearProperty`, `RunScript(...)` with arguments, `Skin.SetString` and
+`ReloadSkin`. JSON-RPC exposes none of them.
+
+### Passing an argument that contains a comma
+
+Builtin arguments split on commas, so a JSON payload needs quoting. A
+double-quoted argument with `\"` escapes round-trips byte for byte:
+
+```sh
+SetProperty(my.prop,"[[0,\"first line\"],[3,\"second line\"]]",Home)
+```
+
+Read it back with JSON-RPC `XBMC.GetInfoLabels` on
+`Window(Home).Property(my.prop)` to confirm it landed — never assume, since a
+rejected builtin looks exactly like an accepted one.
 
 ## Is it stopped, or is it wedged?
 
@@ -110,6 +172,10 @@ mere add-on enable/disable bounce. See
   partial success and leaves the tree intact.
 - A push leaves deleted files in place with no indication.
 - `adb shell` mangles compound grep escaping and returns `0`.
+- An EventServer bound on `udp6` only discards every IPv4 builtin without a
+  word, which reads as "this platform has no EventServer".
+- `nc -u` on the device never exits, so an unbounded `adb shell` hangs after the
+  builtin has already been delivered.
 
 ## Open questions
 

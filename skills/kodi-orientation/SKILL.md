@@ -128,6 +128,7 @@ prevent.
 
 **Kodi's own data**
 [`kodi-library-data`](../kodi-library-data/SKILL.md) ·
+[`kodi-library-nodes`](../kodi-library-nodes/SKILL.md) ·
 [`kodi-database-writing`](../kodi-database-writing/SKILL.md) ·
 [`kodi-texture-cache`](../kodi-texture-cache/SKILL.md)
 

@@ -85,10 +85,11 @@ See [`../README.md`](../README.md) for how to install and use these, and
 
 ## Kodi's own data
 
-*The databases and the artwork cache.*
+*The databases, the library node trees, and the artwork cache.*
 
 - [`kodi-database-writing`](kodi-database-writing/SKILL.md) — Write to Kodi's own library databases without corrupting them or wedging Kodi.
 - [`kodi-library-data`](kodi-library-data/SKILL.md) — Kodi's own SQLite databases — where they live, which are per-profile, how to read one safely, and which user-facing operations destroy add-on data.
+- [`kodi-library-nodes`](kodi-library-nodes/SKILL.md) — Profile library nodes replace Kodi's shipped ones and are never merged.
 - [`kodi-texture-cache`](kodi-texture-cache/SKILL.md) — Serve artwork Kodi caches efficiently, and understand when caching saves nothing at all.
 
 ## Shipping it

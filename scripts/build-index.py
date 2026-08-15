@@ -52,7 +52,7 @@ CATEGORIES = [
     ("skinning", "Skinning",
      "Skin XML and the coordinate spaces behind it."),
     ("kodi-data", "Kodi's own data",
-     "The databases and the artwork cache."),
+     "The databases, the library node trees, and the artwork cache."),
     ("shipping", "Shipping it",
      "Versions, releases, and getting a change accepted upstream."),
     ("adjacent", "Adjacent systems",

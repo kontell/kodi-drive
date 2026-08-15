@@ -150,6 +150,7 @@ With add-ons ruled out, use the symptom:
 | Hangs at startup, or on quit | a service add-on that will not stop; check for `waiting on thread` |
 | Whole UI freezes, unrecoverable | a blocked callback; check for repeated `Thread JobWorker terminating` with no `JobWorker start` after |
 | Library empty or wrong | the databases — see [`kodi-library-data`](../kodi-library-data/SKILL.md) |
+| Home categories missing Genres/Artists/Albums on every skin | the `library://` node tree — see [`kodi-library-nodes`](../kodi-library-nodes/SKILL.md) |
 | Playback fails or plays wrong track | stream and player selection; sample `time` twice before believing it is playing |
 | Artwork missing or slow | the texture cache |
 | Skin renders wrong or partially | a dropped include — Kodi logs a parse error and renders without it |

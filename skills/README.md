@@ -105,6 +105,7 @@ See [`../README.md`](../README.md) for how to install and use these, and
 *Not Kodi, but things Kodi add-ons routinely talk to.*
 
 - [`jellyfin-client`](../adjacent/jellyfin-client/SKILL.md) — Write a Kodi add-on that talks to a Jellyfin or Emby server without losing sync state or playing the wrong stream.
+- [`jellyfin-test-server`](../adjacent/jellyfin-test-server/SKILL.md) — Stand up a disposable Jellyfin server from source — exact version, no root, no Docker, first-run wizard completed over the API. Use when a Jellyfin client add-on or server plugin needs a real server to develop against, when a bug only reproduces on a specific server version, or when a test needs instances it can create and destroy by script.
 
 ## Working with this repo
 

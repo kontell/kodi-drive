@@ -144,8 +144,10 @@ def iter_files(root: Path):
 # The exemption is deliberately narrow: a version keyword must sit immediately
 # before the number, not merely somewhere on the line. A line-level test hides
 # real addresses in ordinary prose — "connect to 172.16.9.9 for the build server"
-# was exempted by the word "build" during testing.
-VERSION_PREFIX = _re(r"(version|assembly|semver|\bv)\s*[:=]?\s*$")
+# was exempted by the word "build" during testing. The optional quotes admit the
+# JSON spellings ("version": "10.11.0.2", "targetAbi": "10.11.0.0") that a
+# Jellyfin plugin meta.json example is made of.
+VERSION_PREFIX = _re(r"(version|assembly|semver|abi|\bv)[\"']?\s*[:=]?\s*[\"']?$")
 
 
 def scan_line(line: str) -> list[tuple[str, str, str]]:

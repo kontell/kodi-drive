@@ -20,14 +20,23 @@ metadata:
 **3,870 C++ files, 42 MB.** Grepping it blind is slow and the results are noisy.
 Three things make it navigable.
 
-## Get a local clone; work from it, not from memory
+## Find the tree first; do not invent a search
 
-Kodi's behaviour differs meaningfully between majors, so a claim about "Kodi" is
-usually a claim about one version. Clone the tag you care about:
+Work from a clone of the version you are debugging, not from memory. It is often
+already on the machine under a name like `ref/kodi-piers-full` or
+`ref/kodi-omega-full`.
+
+1. `ls` those conventional sibling paths. Stop there.
+2. If they are absent, ask where the tree is.
+3. If there is no tree, ask before cloning. Then:
 
 ```sh
 git clone --depth 1 --branch 21.3-Omega https://github.com/xbmc/xbmc kodi-omega
 ```
+
+Once you have the tree, grep *inside it*. `find xbmc -name 'JobManager.*'` is
+how you locate a file that moved between majors. `find $HOME -name Player.cpp`
+is not.
 
 Everything below is Kodi 21.3, verified against that tree.
 

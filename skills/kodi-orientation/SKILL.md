@@ -54,11 +54,22 @@ sends the user down the wrong path.
 read it back ([`kodi-jsonrpc`](../kodi-jsonrpc/SKILL.md)). Kodi will disagree with
 you more often than you expect.
 
-**3. Clone the source of whatever you are interfacing with.**
+**3. Read the source of whatever you are interfacing with.**
 
 Kodi itself, the add-on you depend on, the server you are talking to. Recall of a
 specific API at a specific version is not good enough, and Kodi's
 version-to-version differences are exactly where the expensive bugs live.
+
+Do not walk the disk looking for the tree. In this order:
+
+1. **Look briefly.** `ls` a handful of conventional names next to the project —
+   `ref/kodi-piers-full`, `ref/kodi-omega-full`, `kodi-omega`, `kodi-piers`.
+   That is the whole search. A recursive `find` from `$HOME` or the working
+   tree is not a brief look.
+2. **If none of those exist, ask where the tree is.**
+3. **If there is no tree, ask permission to clone.** A Kodi source checkout is
+   large. Do not clone unbidden. The command, once you have it, is in
+   [`kodi-source-map`](../kodi-source-map/SKILL.md).
 
 **4. Credentials go in a file, never in a repo and never in your output.**
 

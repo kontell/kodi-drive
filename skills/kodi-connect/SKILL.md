@@ -10,9 +10,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: access
-  verified-kodi: "21.3 Omega"
-  verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-platform: "Linux x86_64, Android TV"
+  verified-date: "2026-08-15"
   verified-method: "observed"
 ---
 
@@ -123,6 +123,18 @@ sleep 1
 kodi-remote get GUI.GetProperties '{"properties":["currentwindow"]}'
 ```
 
+**It may not be listening on IPv4 at all.** On 22.0b1 on Android TV the
+EventServer binds `udp6 [::]:9777` and takes no IPv4 socket, so every datagram
+`kodi-builtin` used to send was discarded in silence. It now resolves with
+`AF_UNSPEC`, which covers the case where you have an IPv6 route to the target;
+where you have none, [`kodi-adb`](../kodi-adb/SKILL.md) has the way in. Confirm
+the binding on the target rather than reading `services.esenabled`, which is
+`True` either way:
+
+```sh
+netstat -lun | grep 9777     # a `udp6` row with no `udp` row means v6 only
+```
+
 **ADB** — Android and Android TV. Needed for logs, installs, and anything
 Android-specific. See the `kodi-adb` skill.
 
@@ -151,7 +163,8 @@ kodi-remote get JSONRPC.Introspect
   Scanning with `curl -f` therefore misses every Kodi configured the way Kodi
   itself recommends. `kodi-discover` accepts 200 *and* 401 for this reason.
 - **The EventServer never reports failure.** A wrong builtin name, a disabled
-  service, a wrong port — all identical to success from the sender's side.
+  service, a wrong port, an IPv4 packet to a `udp6`-only socket — all identical
+  to success from the sender's side.
 - **`Application.GetProperties` with no arguments returns `null`**, not an error.
 - **Kodi may answer on the LAN address but not loopback, or vice versa**, depending
   on binding and firewall. Discovery reports each address separately; if one fails,

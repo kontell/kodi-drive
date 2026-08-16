@@ -4,14 +4,15 @@ description: >
   Kodi's own SQLite databases — where they live, which are per-profile, how to
   read one safely, and which user-facing operations destroy add-on data. Use
   before reading or writing MyVideos, MyMusic, Addons33 or Textures directly,
-  when snapshotting a database for comparison, or when library rows have vanished
-  and you need to know whether something deleted them.
+  when snapshotting a database for comparison, when a schema version moved under
+  you mid-beta, or when library rows have vanished and you need to know whether
+  something deleted them.
 license: CC-BY-SA-4.0
 metadata:
   category: kodi-data
-  verified-kodi: "21.3 Omega"
-  verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-platform: "Linux x86_64, armv7l"
+  verified-date: "2026-08-16"
   verified-method: "observed"
 ---
 
@@ -38,6 +39,30 @@ holds outcome.
 The trailing number is a schema version and changes between Kodi releases. A path
 that works on 21 will silently not exist on 22, and a script that ignores the
 error reads nothing while reporting nothing.
+
+**It also changes *within* a release.** Kodi 22 bumped MyVideos twice during
+beta, so "the Piers video database" is three different numbers depending on when
+the install was built:
+
+| Kodi | MyVideos | MyMusic | Textures |
+|---|---|---|---|
+| 21 Omega | 131 | 83 | 13 |
+| 22 Piers, early beta | 146 | 84 | 14 |
+| 22 Piers, from 2026-08 | 147, then 148 | 84 | 14 |
+
+Read the number from the file, never from the Kodi version. An add-on that gates
+on a schema version — the right thing to do before writing — will otherwise
+refuse to run on a beta that moved under it.
+
+`148` is worth knowing about if you write `streamdetails` yourself: it adds
+`iSource` and `iVersion` to that table. `iSource` is a precedence ladder
+(`UNDEFINED 0`, `EXTERNAL 10`, `MEDIA 20`, `NFO 30`, `LEGACY 40` in
+`xbmc/utils/StreamDetails.h`) and `CStreamDetails::ShouldUpdateWithNewDetails`
+lets the player overwrite stored details whose source is lower or equal. Rows
+inserted without those columns read back as `UNDEFINED`, so anything the player
+observes replaces them on playback stop — which matters when what it observed was
+a transcode rather than the source file. Both columns are additive: a writer that
+names its columns is unaffected, and the migration is two `ALTER TABLE`s.
 
 **Globbing is not enough either — Kodi leaves the old databases in place.** A
 single real install held all of these at once:

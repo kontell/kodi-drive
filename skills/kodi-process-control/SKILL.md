@@ -97,12 +97,26 @@ A new `pgrep -x kodi.bin` pid confirms the restart actually happened.
 **An add-on bounce is not a restart.** Disabling and re-enabling an add-on
 restarts its *service*, but Kodi caches each add-on's **language strings**
 (`resources/language/**/strings.po`) for the whole process lifetime. Newly added
-`30xxx` string ids therefore render **blank** until a full restart. Anything else
-loaded once at Kodi startup — skin PO files, some settings-schema changes — is in
-the same category.
+`30xxx` string ids therefore render **blank** until a full restart.
+
+Measured on Omega 21.3, one id, one file on disk, three readings: blank when the
+add-on was reinstalled, blank again after a disable/enable bounce, and correct
+after Kodi genuinely restarted. Nothing about the file changed between them.
 
 When a new string shows empty despite a correct `strings.po`, that is the cache,
 not a bug in your file.
+
+**A skin's strings are not in that category.** A newly added skin id rendered on
+screen straight after `ReloadSkin()`, in a process whose pid had not changed for
+hours — so a skin can gain a string and use it in the same session, while an
+add-on cannot. (Skin `<res>` is the opposite way round: `addon.xml` is parsed
+only at skin load, so a resolution change does need a restart.)
+
+**`System.RestartApp` over JSON-RPC can answer and do nothing.** It returned
+without error on Omega 21.3 and left the same pid running with its uptime
+unbroken; a subsequent check found the string still blank, which is what exposed
+it. Whatever you use, confirm with the pid rather than with the call's reply or
+a ping — a ping is answered by the process you were trying to replace.
 
 Restarts are heavier than a bounce and reset playback and navigation state, so
 reach for one only when a bounce genuinely will not do. On a box with multiple
@@ -139,12 +153,18 @@ library scans, artwork caching, and idle time.
 - A relaunched second Kodi answers JSON-RPC, so connectivity checks pass while
   your changes appear to have no effect.
 - Sampling the wrapper produces a small, believable number rather than an error.
+- `System.RestartApp` over JSON-RPC returns cleanly whether or not it restarts
+  anything, and the ping that follows is answered by the process you meant to
+  replace.
 
 ## Open questions
 
 - The wrapper behaviour was verified on a Debian-packaged Kodi. Flatpak, snap,
   LibreELEC, and Windows builds have different process trees and have not been
   checked — do not assume `pgrep -x kodi` finds a wrapper there, or that one exists.
+- Why `System.RestartApp` over JSON-RPC was a no-op on the Debian-packaged Omega
+  21.3 box is not established. The `RestartApp()` builtin documented above was
+  not tried in the same session, so whether the two paths differ is untested.
 - Whether `Application.Quit` over JSON-RPC also stops the wrapper, or whether the
   wrapper relaunches after a clean quit, has not been tested.
 

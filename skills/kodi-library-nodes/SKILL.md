@@ -102,9 +102,54 @@ cp -an "$SYSTEM/library/video/." "$PROFILE/library/video/"
 Do both. Seeding only video is how you get a Movies row that still has Genres
 and a Music row that does not.
 
+Kodi's own shipped nodes are the place to look up a stock icon name or the core
+string id for a label you are about to invent one of — each file pairs the two,
+and using them means a skin substitutes its own artwork and the label follows
+the interface language for free:
+
+```sh
+grep -h '<label>\|<icon>' /usr/share/kodi/system/library/*/*.xml
+```
+
 Node XML syntax, visibility, and ordering belong on the wiki:
 [Video nodes](https://kodi.wiki/view/Video_nodes),
 [Music nodes](https://kodi.wiki/view/Music_nodes).
+
+## A new node file is invisible until the skin reloads
+
+Kodi does not re-read a node XML you have just written. The file lists fine in
+its folder and fails when you enter it, and the failure has a signature worth
+recognising:
+
+```
+error <general>: GetDirectory - Error getting library://video/<folder>/mynode.xml/
+```
+
+with **no add-on line above it**. For a node whose `<path>` is a plugin path
+that is the tell: the plugin was never invoked, so nothing is wrong with your
+route. Five freshly written nodes failed this way on Omega 21.3 and all five
+worked, unchanged, after `ReloadSkin()`.
+
+If the log *does* carry your add-on's line, the node tree is fine and the fault
+is in the route.
+
+## `<limit>` and `<content>` do nothing on a folder node
+
+They are smart-playlist elements. A `type="folder"` node hands its `<path>` to
+`CDirectory::GetDirectory` and takes back whatever comes, so neither trims nor
+filters the result:
+
+```xml
+<node type="folder">
+	<label>Five of them</label>
+	<content>movies</content>
+	<limit>5</limit>
+	<path>plugin://<ADDON>/?…</path>
+</node>
+```
+
+Verified on Omega 21.3: that node returned **415** items, the same as the path
+alone. If a listing needs bounding, bound it in whatever answers the path.
 
 ## Repair a profile that already lost the defaults
 
@@ -123,6 +168,10 @@ restart.
   screenshot of "the skin is wrong" is consistent with a node-tree problem.
 - A `library://…/genres.xml/` path against a tree that has no `genres.xml`
   returns `Invalid params.`, not the system file.
+- A node file written a moment ago lists in its folder and fails when entered,
+  which reads as a broken node rather than an unreloaded skin.
+- `<limit>` on a folder node is accepted and ignored, so a node that was meant
+  to show five rows shows all of them.
 
 ## Verifying it
 
@@ -141,6 +190,13 @@ Years, Top 100, …) plus any custom folders, list
   `library://music/` and `library://video/`, and a filter node that existed in
   the active video tree (`library://video/movies/genres.xml/`), returned items
   here. The 0-item case has not been re-found.
+- The reload is not instant, and how long it needs was not pinned down: the
+  same five nodes still failed after a `ReloadSkin()` followed by a four-second
+  wait, and succeeded after one followed by six. Nothing distinguishes the two
+  but the wait, so treat a single quick retry as inconclusive rather than proof
+  the file is wrong.
+- What Kodi is actually caching here was not established — only that a reload
+  clears it.
 - Whether a profile with `hasDatabases() == false` still isolates
   `library/music/` under the master profile has not been checked; the
   `GetLibraryFolder` fallback is `GetUserDataFolder()/library`.

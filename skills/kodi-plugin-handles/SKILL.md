@@ -95,7 +95,40 @@ slash**. A handler table keyed on `mode=syncplay` will miss `mode=syncplay/` and
 silently serve the add-on root instead — which looks like the node being empty
 or wrong, not like a routing bug.
 
-Strip the trailing slash before handler lookup.
+**The slash lands on whichever query parameter comes last**, which is `mode`
+only for routes that take no other. Stripping it off `mode` after parsing fixes
+the single-parameter routes and leaves every other one broken, in a way that
+looks like a server problem rather than a routing one.
+
+Measured on Omega 21.3, two hand-made nodes in one folder:
+
+| `<path>` | |
+|---|---|
+| `plugin://<ADDON>/?mode=continuewatching/` | lists its items — the slash is on `mode` |
+| `plugin://<ADDON>/?mode=browse&view=<VIEW_ID>&type=movies&folder=all/` | fails |
+
+The second reached the route with `folder="all/"`. That matched no node key, so
+the listing fell through to its "drill into a container id" branch and asked the
+server for an item called `all/` — a 400, a failed fetch, and a node that reads
+as broken:
+
+```
+[addon] browse failed (movies/all/): GET http://<JELLYFIN_HOST>/Items -> 400
+error <general>: GetDirectory - Error getting plugin://<ADDON>/?…&folder=all/
+error <general>: GetDirectory - Error getting library://video/<folder>/test-02.xml/
+```
+
+The same path with the slash removed returned the whole library. So strip **one
+trailing slash off the raw query string before parsing it**, not off `mode`
+afterwards:
+
+```python
+params = dict(parse_qsl(query.lstrip("?").rstrip("/")))
+```
+
+Check first that no parameter of yours legitimately ends in a slash. A slash
+parked on a dummy trailing parameter is harmless — verified — so it is only ever
+the last value that has to tolerate it.
 
 ## What fails silently
 
@@ -103,7 +136,9 @@ Strip the trailing slash before handler lookup.
   caller simply never returns.
 - Enabling `reuselanguageinvoker` breaks routes that worked yesterday, with no
   change to those routes.
-- A trailing slash routes to the add-on root rather than erroring.
+- A trailing slash routes to the add-on root rather than erroring — and when it
+  lands on a parameter other than `mode`, the route runs and fails downstream,
+  so the log blames the server rather than the path.
 - An action route with an open handle is harmless until something waits on it.
 
 ## Open questions

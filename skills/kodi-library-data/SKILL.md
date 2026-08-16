@@ -97,6 +97,40 @@ cp MyVideos131.db MyVideos131.db-wal MyVideos131.db-shm /tmp/snapshot/
 
 Prefer reading while Kodi is stopped where you can.
 
+## Telling a freshly created database from a migrated one
+
+If you are capturing a schema dump as a fixture, the two are not
+interchangeable: a fixture is supposed to be what `CreateTables` produces, and a
+database that reached its version by migration can carry text no fresh install
+has.
+
+You do not need the install's history to tell them apart — the dump says which it
+is. SQLite rewrites a table's **stored** `CREATE` statement when you add a
+column, splicing in the `ALTER` clause verbatim, so the migration's own
+capitalisation and defaults survive:
+
+```console
+$ sqlite3 t.db "CREATE TABLE t (a integer, b text);"
+$ sqlite3 t.db ".schema t"
+CREATE TABLE t (a integer, b text);
+
+$ sqlite3 t.db "ALTER TABLE t ADD iSource INTEGER DEFAULT 40;"
+$ sqlite3 t.db ".schema t"
+CREATE TABLE t (a integer, b text, iSource INTEGER DEFAULT 40);
+```
+
+Kodi's own DDL for that column reads `iSource integer` — lower case, no default —
+so a dump showing `iSource INTEGER DEFAULT 40` came through the upgrade path and
+one showing `iSource integer` was created at that version. Compare the dump
+against the `CreateTables` text in the source rather than trusting the file's
+age or the install's apparent history.
+
+The same rewrite is why a dump can differ from an older fixture for reasons that
+are not a schema change at all: quoting in `CreateTables` is edited from time to
+time — Kodi 22 started backtick-quoting `sets` because it is a reserved word in
+MySQL 9.6 — and every database created after that commit carries the new
+spelling. SQLite treats the two alike, so it is noise in a diff, not a finding.
+
 ## "Clean Library" deletes plugin-sourced movies
 
 Kodi's own **Videos > Files > Clean Library** removes movie rows whose source is

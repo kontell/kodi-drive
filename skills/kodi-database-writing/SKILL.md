@@ -6,13 +6,14 @@ description: >
   wrong or missing after a sync, when a stored songid points at a different track
   after a rebuild, or when deciding between JSON-RPC and SQLite for library
   writes. Covers the echo loop that JSON-RPC writes cause, the free way to make
-  widgets notice a direct write, the reserved artist row, and song-id reuse.
+  widgets notice a direct write, why Library.HasContent cannot tell you the skin
+  has caught up, the reserved artist row, and song-id reuse.
 license: CC-BY-SA-4.0
 metadata:
   category: kodi-data
   verified-kodi: "21.3 Omega, 22.0b1 Piers"
-  verified-platform: "Linux x86_64, Android TV"
-  verified-date: "2026-08-14"
+  verified-platform: "Linux x86_64, Android TV, armv7l"
+  verified-date: "2026-08-16"
   verified-method: "observed"
 ---
 
@@ -61,6 +62,61 @@ Kodi logs *"does not exist - skipping scan"*, finishes in 0 s having probed
 nothing, and **still completes the cycle that invalidates cached containers**.
 
 Guard it on `Library.IsScanningMusic` so two never overlap.
+
+## `Library.HasContent` is not "has the skin caught up"
+
+The scan cycle above refreshes containers that already exist. It cannot help the
+**empty → populated** case: a widget row built while the table was empty stays
+empty, because its provider's last fetch returned nothing. Only rebuilding the
+windows fixes that, which is what `ReloadSkin()` is for.
+
+The obvious way to detect that case is to ask whether Kodi thinks the library is
+empty while your rows exist. **That test disarms itself before you can use it.**
+
+`Library.HasContent(Movies|TVShows|Music|MusicVideos)` is a tri-state cache in
+`xbmc/guilib/guiinfo/LibraryGUIInfo.cpp`. Each starts at `-1`; `GetBool` runs a
+count query and caches the answer **only while the value is negative**:
+
+```cpp
+case LIBRARY_HAS_MUSIC:
+{
+  if (m_libraryHasMusic < 0)
+  { // query
+    CMusicDatabase db;
+    if (db.Open())
+      m_libraryHasMusic = (db.GetSongsCount() > 0) ? 1 : 0;
+```
+
+`ResetLibraryBools()` puts them back to `-1`, from five places: the music and
+video scanners on scan-finished, `GUIWindowMusicBase`, `CMusicDatabase`, and
+`CProfileManager` on profile load.
+
+The trap is what happens between those two facts. A running skin re-evaluates its
+visibility conditions continuously, so after any scan resets the bools, **the
+first re-evaluation after your first row commits caches `true`** — in the middle
+of a long write, long before the rebuild that would actually reveal the section.
+A check made at the end of the write is then told "Kodi already knows about this
+content", declines to reload, and leaves the row empty with a full table under
+it. Observed on a first sync that wrote video before music: the music row stayed
+blank until an unrelated command happened to rebuild the skin minutes later.
+
+**So do not infer "the skin has been rebuilt since this content appeared" from
+Kodi's bool — it answers a different question.** Track it yourself, or reload
+unconditionally at the point you know the write is finished. An unnecessary
+reload costs a window teardown; a missed one costs a section that is invisible
+until something else rebuilds the skin.
+
+Two related notes for anyone reaching for the reload:
+
+* The cost is not what you would guess. Splitting one end-of-write reload into
+  three smaller ones — one per media kind as it lands — measured a **lower** peak
+  RSS on an ARM box than the single reload did, because one rebuild against a
+  fully populated library re-renders every widget at once while later rebuilds
+  find a warm texture cache.
+* Poll for the flag before reloading rather than sleeping a fixed interval, and
+  reload anyway on timeout. Rebuilding against a stale bool at least becomes
+  right on the next reload; not reloading leaves the section hidden until Kodi
+  restarts.
 
 ## Kodi reserves `idArtist 1`
 

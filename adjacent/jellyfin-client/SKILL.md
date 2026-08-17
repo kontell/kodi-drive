@@ -12,7 +12,7 @@ metadata:
   category: adjacent
   verified-kodi: "21.3 Omega"
   verified-platform: "Linux x86_64, Android TV"
-  verified-date: "2026-08-13"
+  verified-date: "2026-08-17"
   verified-method: "observed"
 ---
 
@@ -155,7 +155,58 @@ mpegts demuxer is unaffected because it reads the PMT.
   `NoCompatibleStream`.
 - **EPG filtering uses `MaxStartDate`, not `MaxEndDate`.**
 - Use the `Authorization` header and the `ApiKey` query parameter. The deprecated
-  `X-Emby-Authorization` and `api_key` forms are being removed.
+  `X-Emby-Authorization` and `api_key` forms are being removed — and **from v12
+  they are off by default**, see below.
+
+## v12 rejects the legacy auth forms by default
+
+`ServerConfiguration.EnableLegacyAuthorization` lost its `= true` initializer, so
+a fresh v12 server writes `false`. The code that consults it did not change, only
+the default, so nothing in a diff points at it. Measured on a fresh v12.0-rc5
+instance with a valid token:
+
+| form | v12 default |
+|---|---|
+| `Authorization: MediaBrowser ..., Token="..."` | 200 |
+| `?ApiKey=<token>` | 200 |
+| `?api_key=<token>` | **401** |
+| `X-Emby-Authorization:` / `X-Emby-Token:` header | **401** |
+| `Authorization: Emby ...` scheme name | **401** |
+
+**On `/socket` the rejection is a 403 on the handshake, not a 401** — so a client
+still building its socket URL with `api_key=` fails in a way that looks like a
+routing or upgrade problem rather than an auth one.
+
+A client that already uses the `Authorization` header and `ApiKey` needs no
+change. Anything else stops working the day a user upgrades.
+
+## Keep-alive: what the numbers actually are
+
+The server advertises and enforces a WebSocket keep-alive contract. Measured by
+connecting and then staying deliberately silent (identical constants in 10.11.11
+and v12.0-rc5, so this is both):
+
+```
+t+ 0.1s  ForceKeepAlive  data=60   <- advertisement, sent unconditionally on connect
+t+48.1s  ForceKeepAlive  data=60   <- inactivity warning
+t+60.1s  ForceKeepAlive  data=60   <- inactivity warning
+t+80.2s  socket closed
+```
+
+Three things worth knowing:
+
+- **The first `ForceKeepAlive` is not a warning.** It arrives immediately on
+  connect and its `Data` is the timeout in seconds. Treating it as "the server
+  thinks I am idle" misreads a normal connection.
+- **Warnings start at ~48 s**, the first watcher tick past the 45 s threshold
+  (`WebSocketLostTimeout` 60 × `ForceKeepAliveFactor` 0.75).
+- **The drop is later than the 60 s timeout suggests** — observed at 80 s.
+  `LastKeepAliveDate` is refreshed *only* by the client's own `KeepAlive`;
+  sending a `ForceKeepAlive` does not reset it, so the socket is classed lost on
+  a tick past 60 s and the close frame follows.
+
+A client sending `KeepAlive` every 30 s sits inside the warning threshold and
+should never see an inactivity `ForceKeepAlive` at all.
 
 ## Downloading and seeking
 

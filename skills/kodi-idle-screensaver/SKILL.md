@@ -3,16 +3,17 @@ name: kodi-idle-screensaver
 description: >
   Detect idleness and control the screen from a Kodi add-on — dim it, blank it,
   or turn the display off — without stranding the user's settings. Use when
-  building a sleep timer, a screen-off feature, or anything that suppresses the
-  screensaver, and when a feature must survive Kodi being killed mid-operation.
-  Covers the screensaver that will not fire during video, and the crash breadcrumb
-  that prevents leaving settings changed.
+  building a sleep timer, a screen-off feature, a wake-time hook, or anything
+  that suppresses the screensaver, and when a feature must survive Kodi being
+  killed mid-operation. Covers the screensaver that will not fire during video,
+  the wake event that never fires when the screensaver is set to None, and the
+  crash breadcrumb that prevents leaving settings changed.
 license: CC-BY-SA-4.0
 metadata:
   category: python-addon
   verified-kodi: "21.3 Omega"
   verified-platform: "Linux x86_64, Android TV"
-  verified-date: "2026-08-13"
+  verified-date: "2026-08-17"
   verified-method: "observed"
 ---
 
@@ -82,9 +83,53 @@ Distinguish the two endings:
 resync state that may have gone stale while idle, rather than polling for changes
 nobody was watching.
 
+**But the wake event never fires when the screensaver is set to None.** With
+`screensaver.mode` empty — the user picked "None", which real installs do —
+activation still *happens*: `ActivateScreenSaver` flips
+`System.ScreenSaverActive` to true and `GUI.OnScreensaverActivated` is
+announced. The wake is what goes missing: input ends the screensaver state
+(the boolean drops back to false) and **no `GUI.OnScreensaverDeactivated` is
+ever announced**. Observed on 21.3 by capturing the JSON-RPC TCP announcement
+stream through a full activate → wake cycle in both configurations: with a
+saver configured the pair arrives, with mode empty only `OnScreensaverActivated`
+does — and a service add-on subscribed via `onNotification` saw the same
+absence over a longer horizon.
+
+So a wake hook on `OnScreensaverDeactivated` is dead code on a
+screensaver-None box, in production and not just in tests. If the resync
+matters, give it a second trigger — `System.OnWake`, or a poll — rather than
+trusting the pair to be symmetric.
+
+## Driving the screensaver in a test
+
+The whole cycle can be driven headlessly, with two traps:
+
+```sh
+# a saver must be configured, or the wake event above never comes
+kodi-remote get Settings.SetSettingValue \
+  '{"setting":"screensaver.mode","value":"screensaver.xbmc.builtin.dim"}'
+kodi-builtin 'ActivateScreenSaver'
+kodi-remote get XBMC.GetInfoBooleans \
+  '{"booleans":["System.ScreenSaverActive"]}'          # readback: true
+kodi-remote get Input.ExecuteAction '{"action":"noop"}' # wake without pressing
+kodi-remote get Settings.SetSettingValue \
+  '{"setting":"screensaver.mode","value":""}'           # restore
+```
+
+- **Wake with the `noop` action**, which deactivates the screensaver and does
+  nothing else. Any real input wakes it too, but `Select` lands on whatever has
+  focus and can answer a dialog you did not know was open.
+- **kodi.log is not a witness here.** On 21.3 neither activation nor
+  deactivation writes a log line at any level, debug included. Read
+  `System.ScreenSaverActive`, or watch the announcements.
+
 ## What fails silently
 
 - `ActivateScreenSaver` during playback does nothing, with no error.
+- Screensaver "None" activates and goes `System.ScreenSaverActive`-true like
+  any other, but its wake announces no `GUI.OnScreensaverDeactivated` — a
+  wake hook simply never runs there.
+- Neither screensaver transition writes a kodi.log line, even at debug.
 - A mid-operation quit leaves the screensaver disabled and volume at zero
   permanently.
 - An action that does not re-arm fires on every poll while the user is away.
@@ -92,6 +137,9 @@ nobody was watching.
 
 ## Open questions
 
+- What a screensaver-None activation *draws*, if anything, was not checked —
+  the observation covers state and announcements, not pixels. Whether the
+  missing wake announcement reproduces on Piers is also untested.
 - DPMS toggling was used on Android; whether the same call is appropriate on a
   Linux desktop session, where a compositor may own DPMS, has not been tested.
 - Whether `CECStandby` reliably returns the display afterwards depends on the TV

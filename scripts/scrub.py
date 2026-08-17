@@ -146,8 +146,11 @@ def iter_files(root: Path):
 # real addresses in ordinary prose — "connect to 172.16.9.9 for the build server"
 # was exempted by the word "build" during testing. The optional quotes admit the
 # JSON spellings ("version": "10.11.0.2", "targetAbi": "10.11.0.0") that a
-# Jellyfin plugin meta.json example is made of.
-VERSION_PREFIX = _re(r"(version|assembly|semver|abi|\bv)[\"']?\s*[:=]?\s*[\"']?$")
+# Jellyfin plugin meta.json example is made of, and the backtick admits the same
+# number written as Markdown inline code in prose (targetAbi `12.0.0.0`), which
+# is how a skill body spells it. The immediately-before requirement is unchanged,
+# so this admits a spelling, not a line-level guess.
+VERSION_PREFIX = _re(r"(version|assembly|semver|abi|\bv)[\"'`]?\s*[:=]?\s*[\"'`]?$")
 
 
 def scan_line(line: str) -> list[tuple[str, str, str]]:

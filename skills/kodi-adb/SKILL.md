@@ -153,6 +153,53 @@ adb -s $D push dist-unzipped/<addon.id> "$K/addons/"
 adb -s $D shell "monkey -p org.xbmc.kodi -c android.intent.category.LAUNCHER 1"
 ```
 
+### And a push can report success while writing nothing
+
+Overwriting an **existing** file under `Android/data` sometimes reports success
+and leaves the file byte for byte unchanged:
+
+```sh
+adb -s $D push app.db "$A/app.db"
+# app.db: 1 file pushed, 0 skipped. 256.9 MB/s (11333632 bytes in 0.042s)
+adb -s $D shell "md5sum $A/app.db"    # unchanged, after three such pushes
+```
+
+The throughput is the tell — 256–362 MB/s over wifi is not a transfer. Size and
+mtime do not move either, so only the checksum shows it.
+
+Creating a **new** file in that same directory fails loudly instead, which is the
+easier case to notice:
+
+```
+adb: error: failed to copy 't1.txt' to '…/_probe.txt':
+  remote couldn't create file: Permission denied
+```
+
+The identical overwrite onto plain `/sdcard`, outside `Android/data`, works.
+
+It is not deterministic: earlier in the same session, pushes over the same two
+files did land. So the rule is not "push is broken under `Android/data`" — it is
+**never trust the success line, compare checksums**:
+
+```sh
+adb -s $D push local.py "$B/local.py"
+[ "$(adb -s $D shell "md5sum $B/local.py" | awk '{print $1}' | tr -d '\r')" \
+  = "$(md5sum local.py | awk '{print $1}')" ] || echo "PUSH DID NOT LAND"
+```
+
+When it has not landed, stage on `/sdcard` and copy on the device:
+
+```sh
+adb -s $D push local.py /sdcard/_stage.py
+adb -s $D shell "cat /sdcard/_stage.py > $B/local.py"
+adb -s $D shell "rm -f /sdcard/_stage.py"
+```
+
+That needs the target group-writable. Kodi's add-on files are `-rw-rw----` and
+take it; an add-on's own data file under `addon_data` was `-rw-r-----`, where the
+`cat` fails with `Permission denied` and there is no route in from the
+workstation at all — the change has to be made by code running inside Kodi.
+
 ## Two things that cost time
 
 **Compound greps get their escaping mangled.** A `grep -c 'a\|b\|c'` sent through
@@ -171,6 +218,8 @@ mere add-on enable/disable bounce. See
 - `rm -rf` under `Android/data` denies permission per file, so a loop reports
   partial success and leaves the tree intact.
 - A push leaves deleted files in place with no indication.
+- A push over an existing file under `Android/data` can report success, at an
+  impossible throughput, and write nothing at all.
 - `adb shell` mangles compound grep escaping and returns `0`.
 - An EventServer bound on `udp6` only discards every IPv4 builtin without a
   word, which reads as "this platform has no EventServer".
@@ -182,6 +231,15 @@ mere add-on enable/disable bounce. See
 - The permission behaviour under `Android/data` was observed on an Android TV
   device without root. Rooted devices, and `/sdcard` paths outside `Android/data`,
   have not been checked and may behave differently.
+- What decides whether an overwrite under `Android/data` lands or silently
+  no-ops is unknown. It is not the file mode — the same `-rw-rw----` add-on file
+  took a push once and refused the next — and it is not whether Kodi is running,
+  since it refused with the app force-stopped. Only the checksum check is
+  reliable.
+- Creating a *new* file under `Android/data` was refused outright on this device
+  (`remote couldn't create file`), which sits badly with the claim above that
+  pushing a whole add-on tree succeeds. Both were observed, on different devices
+  and different Android versions; which variable separates them is untested.
 - Whether `screencap` captures DRM-protected video surfaces (rather than a black
   rectangle) has not been tested — assume it does not.
 - Pulling a native backtrace from an unrooted device is possible via

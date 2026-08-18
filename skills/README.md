@@ -53,6 +53,7 @@ See [`../README.md`](../README.md) for how to install and use these, and
 - [`kodi-paplayer`](kodi-paplayer/SKILL.md) — Control Kodi's audio player (PAPlayer) safely, especially while it is paused.
 - [`kodi-playback-resume`](kodi-playback-resume/SKILL.md) — Hand Kodi an item so the right player opens it, in the right window, at the right position.
 - [`kodi-playback-tempo`](kodi-playback-tempo/SKILL.md) — Change playback rate with pitch correction, and find out why it silently does nothing.
+- [`kodi-playlist-position`](kodi-playlist-position/SKILL.md) — Find out which item of a playlist is actually playing, when Kodi's own answer belongs to a different playlist.
 - [`kodi-pvr-addon`](kodi-pvr-addon/SKILL.md) — Write a Kodi PVR client that plays, records and reports correctly.
 - [`kodi-pvr-menu-hooks`](kodi-pvr-menu-hooks/SKILL.md) — Add context-menu entries to a binary PVR add-on, and know what they can and cannot do.
 

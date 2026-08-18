@@ -65,6 +65,7 @@ See [`../README.md`](../README.md) for how to install and use these, and
 - [`kodi-addon-manifest`](kodi-addon-manifest/SKILL.md) — Get addon.xml right, including the parts Kodi ignores without telling you.
 - [`kodi-announcements`](kodi-announcements/SKILL.md) — React correctly to Kodi's notifications — Player.OnStop, Playlist.OnClear, OnAdd and friends — over JSON-RPC or in an add-on's onNotification.
 - [`kodi-idle-screensaver`](kodi-idle-screensaver/SKILL.md) — Detect idleness and control the screen from a Kodi add-on — dim it, blank it, or turn the display off — without stranding the user's settings.
+- [`kodi-measuring-text`](kodi-measuring-text/SKILL.md) — Measure rendered text width from a Python add-on, using a hidden auto-width label as the ruler.
 - [`kodi-plugin-handles`](kodi-plugin-handles/SKILL.md) — Close your plugin handle, or hang the caller forever.
 
 ## Writing a binary add-on

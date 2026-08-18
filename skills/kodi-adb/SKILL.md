@@ -13,7 +13,7 @@ metadata:
   category: access
   verified-kodi: "21.3 Omega, 22.0b1 Piers"
   verified-platform: "Android TV"
-  verified-date: "2026-08-15"
+  verified-date: "2026-08-18"
   verified-method: "observed"
 ---
 
@@ -200,6 +200,28 @@ take it; an add-on's own data file under `addon_data` was `-rw-r-----`, where th
 `cat` fails with `Permission denied` and there is no route in from the
 workstation at all — the change has to be made by code running inside Kodi.
 
+
+### It also does not truncate
+
+A push that *does* land still writes in place without shortening the file, so a
+shorter file leaves the previous tail behind:
+
+```sh
+adb -s $D shell "wc -c < $T"     # 597
+adb -s $D push short.txt "$T"    # "1 file pushed" — 6 bytes
+adb -s $D shell "wc -c < $T"     # 597, still
+adb -s $D shell "tail -c 40 $T"  # the end of the file it was meant to replace
+```
+
+On a Python file that surfaces as a `SyntaxError` at a line number the file you
+pushed does not have, which reads as a corrupt transfer rather than a
+half-replaced one. The checksum comparison above catches this as well; the
+one-line fix, where the target is writable, is to empty it first:
+
+```sh
+adb -s $D shell "cat /dev/null > $T" && adb -s $D push local/file "$T"
+```
+
 ## Two things that cost time
 
 **Compound greps get their escaping mangled.** A `grep -c 'a\|b\|c'` sent through
@@ -220,6 +242,8 @@ mere add-on enable/disable bounce. See
 - A push leaves deleted files in place with no indication.
 - A push over an existing file under `Android/data` can report success, at an
   impossible throughput, and write nothing at all.
+- A push that does land does not truncate, so a shorter file leaves the previous
+  tail in place and the file on the box is neither version.
 - `adb shell` mangles compound grep escaping and returns `0`.
 - An EventServer bound on `udp6` only discards every IPv4 builtin without a
   word, which reads as "this platform has no EventServer".

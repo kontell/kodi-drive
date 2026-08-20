@@ -12,7 +12,7 @@ metadata:
   category: access
   verified-kodi: "21.3 Omega"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-date: "2026-08-20"
   verified-method: "observed"
 ---
 
@@ -109,9 +109,40 @@ trustworthy in the disable → edit → enable cycle, where the add-on is down a
 Kodi has no in-memory copy to win with. See
 [`kodi-addon-driving`](../kodi-addon-driving/SKILL.md).
 
+## `System.CurrentControl` names what is focused
+
+`XBMC.GetInfoLabels` with `System.CurrentControl` returns the label of the
+focused control — in a context menu the focused button's text, in a list the
+focused item's label. It is how to walk a menu without a screenshot per step:
+read it, `Input.Down`, read again, and stop when a label repeats (lists wrap,
+above). Observed: a context menu walked this way returned its buttons in order —
+Play, Play using…, Play next, Queue item, Information, Add to favourites, Play
+from here, then the add-ons' entries — and a second walk inside an add-on's own
+`Dialog().contextmenu` returned that menu's labels the same way. To press a named
+entry, walk until the label matches, then `Input.Select`.
+
+## The add-on settings dialog opens on the settings pane
+
+`Addon.OpenSettings(<id>)` lands focus on a control in the first category's
+settings list, not on the category column. Observed: the focused label was a
+setting; one `Input.Left` moved to the category column (label "Account", the
+first category); six `Input.Down`s then read "Advanced" and the pane showed that
+category's controls.
+
+## A plugin listing opens focused on `..`
+
+A plugin listing that shows the `..` row opens with focus on it:
+`ListItem.Label` read `..` on every listing opened with `GUI.ActivateWindow`,
+and `Input.Info` on that row opened nothing. One `Input.Down` reaches the first
+real row; read `ListItem.Label` before acting on it.
+
 ## What fails silently
 
 - A wrapped list acts on an arbitrary control instead of erroring.
+- `Input.Info` on the `..` row does nothing, and a screenshot taken afterwards
+  shows the listing you were already looking at.
+- Keys sent to the add-on settings dialog step the settings list, not the
+  categories, until a `left` moves focus over.
 - The third `pagedown` in a settings list does nothing, indistinguishable from a
   dropped keypress.
 - The first `right` in a settings list highlights nothing at all.

@@ -13,7 +13,7 @@ metadata:
   category: playback
   verified-kodi: "21.3 Omega"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-14"
+  verified-date: "2026-08-20"
   verified-method: "observed"
 ---
 
@@ -31,6 +31,10 @@ opens `DialogVideoInfo` for an item carrying only music tags.
 
 So set the info tag for the player you want, and set `<provides>` for the browse
 category you want. They are independent decisions.
+
+What `<provides>` *does* decide is which playlist a listing of yours queues onto
+— and with both values declared, video wins even for songs. See
+[`kodi-plugin-listings`](../kodi-plugin-listings/SKILL.md).
 
 ## The path plays; `setDbId` names the library row
 
@@ -119,6 +123,62 @@ like a broken stream and is not.
 **Stop, wait for the stop to land, then call `PlayMedia`.** Library playback via
 `videodb://` is unaffected, because Kodi sequences the handover itself.
 
+## Kodi keeps its own resume bookmark for a plugin row
+
+When a `plugin://` item stops, Kodi writes a MyVideos bookmark for it keyed on
+the row's path: `CPluginDirectory` stamps `original_listitem_url` on the
+resolved item (`xbmc/filesystem/PluginDirectory.cpp:146-147`) and the save job
+keys the bookmark on that property for plugin sources
+(`xbmc/utils/SaveFileStateJob.cpp:42-61`). The `files` row holds the whole URL in
+`strFilename`, with `strPath` the URL up to its options.
+
+When the row is listed again, `GetNonFolderItemResumeInformation` reads the
+ListItem's own resume point first and **falls back to that bookmark only when no
+point is set** (`xbmc/video/VideoUtils.cpp:708-794`). For an add-on whose
+resume points come from a server:
+
+- Stamp `setResumePoint(position, total)` on every listing row that has a
+  total, **position 0 included**. A zero point with a total reads as "set,
+  nothing to resume" — `IsResumable` false — and skips the fallback. Observed
+  on 21.3: a row whose server position was 0, with a 600 s bookmark planted on
+  its plugin path, read `ListItem.IsResumable` false once the listing stamped
+  `(0, total)`. Without the stamp the fallback is the stale local time.
+- That rule is for listing rows. Whether a zero point on the **resolved** item
+  (`setResolvedUrl`) is read as a resume is in Open questions; leave it
+  unstamped when playback is to start at 0.
+
+## Kodi's "Reset resume position" never reaches an add-on
+
+The entry is visible on any row whose `GetItemResumeInformation` is resumable
+(`xbmc/video/ContextMenus.cpp:76-84`), so a plugin row that stamps a server
+position shows it. Executing it queues `CVideoLibraryResetResumePointJob`
+(`ContextMenus.cpp:86-90`), whose whole effect is
+`CVideoDatabase::DeleteResumeBookMark` — the MyVideos bookmark for the item's
+file id, or for its path when the tag carries none
+(`xbmc/video/jobs/VideoLibraryResetResumePointJob.cpp:45-85`,
+`xbmc/video/VideoDatabase.cpp:3396-3436`). The `VideoLibrary.OnUpdate`
+announcement fires only for library content types, and the job's completion
+refreshes the container (`xbmc/video/VideoLibraryQueue.cpp:238-244`), which
+re-reads the listing.
+
+So for a plugin row nothing tells the add-on, and the refresh stamps the
+server's position straight back. Offer a reset of your own — and clear Kodi's
+half too, or the fallback above resurrects the position you just removed:
+
+```
+Files.SetFileDetails  {"file": "<the row's plugin:// path>", "media": "video", "resume": {"position": 0}}
+```
+
+It is the one JSON-RPC write that reaches a plugin path: it requires the file to
+exist, and `CPluginFile::Exists` answers true for any `plugin://`
+(`xbmc/filesystem/PluginFile.cpp:26-29`); a zero position makes
+`UpdateResumePoint` clear the bookmark rather than write one
+(`xbmc/interfaces/json-rpc/VideoLibrary.cpp:1176-1196`). Observed on 21.3:
+`"resume": {"position": 100, "total": 1000}` on a plugin path produced a
+`bookmark` row (100.0 / 1000.0) joined to a new `files` row; `"position": 0`
+removed the bookmark and left the `files` row, which is what Kodi leaves after
+any plugin play.
+
 ## Sidecar subtitles are ordered before embedded ones
 
 Kodi registers a ListItem's subtitle files during `OpenInputStream`, which runs
@@ -156,6 +216,10 @@ nothing to show.
 - Sidecar ordering shifting every embedded subtitle index.
 - `setDbId` naming a different library row than the path being played, with no
   error.
+- A plugin row with no stamped resume point advertising a stale bookmark Kodi
+  saved for it, however the server now stands.
+- Kodi's "Reset resume position" on a plugin row deleting a local bookmark and
+  nothing else, then refreshing the listing that restores the position.
 
 ## Open questions
 
@@ -163,6 +227,10 @@ nothing to show.
   structural, but the number is not a constant to design against.
 - Whether `StartOffset` behaves identically for a `plugin://` path and a library
   item has not been separately confirmed.
+- Whether a zero resume point stamped on the *resolved* item makes Kodi treat
+  the play as a resume and seek to the MyVideos bookmark for the path. One
+  add-on records that it does and builds its resolved item without a point for
+  a start at 0; it was not re-verified here.
 - Whether `MusicPlayer.*` infolabels follow the ListItem tags or the library row
   when `setDbId` and the path disagree. `Player.GetItem` title/album followed
   the tags; `id` followed `setDbId`. The skin now-playing banner after a

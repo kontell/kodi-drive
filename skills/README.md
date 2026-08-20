@@ -68,6 +68,7 @@ See [`../README.md`](../README.md) for how to install and use these, and
 - [`kodi-idle-screensaver`](kodi-idle-screensaver/SKILL.md) — Detect idleness and control the screen from a Kodi add-on — dim it, blank it, or turn the display off — without stranding the user's settings.
 - [`kodi-measuring-text`](kodi-measuring-text/SKILL.md) — Measure rendered text width from a Python add-on, using hidden auto-width labels as rulers.
 - [`kodi-plugin-handles`](kodi-plugin-handles/SKILL.md) — Close your plugin handle, or hang the caller forever.
+- [`kodi-plugin-listings`](kodi-plugin-listings/SKILL.md) — Predict what Kodi does with the rows a plugin lists — which playlist a click lands on, whether the rest of the listing is queued, and which context entries a plugin row can never get.
 
 ## Writing a binary add-on
 

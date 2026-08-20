@@ -12,7 +12,7 @@ metadata:
   category: adjacent
   verified-kodi: "21.3 Omega"
   verified-platform: "Linux x86_64, Android TV"
-  verified-date: "2026-08-17"
+  verified-date: "2026-08-20"
   verified-method: "observed"
 ---
 
@@ -236,6 +236,47 @@ It must be a *list*, because an item under two libraries belongs to both and
 the **event's Parent**, because `DeleteItem` clears the item's own parent before
 firing `ItemRemoved`.
 
+## An album's `DateCreated` is when the scanner created its row
+
+Sorting albums by `DateCreated` lists a scan, not arrivals. The field is set when
+the scanner creates the album entity, and a rescan that re-creates album rows
+stamps them in folder order. Observed on 10.11.11: a library of 1,538 albums
+shared 768 distinct `DateCreated` seconds, in blocks of 47–65 albums per second,
+and the 25 "newest" by that field were the first artists of the alphabet, all
+within one second of each other, while the albums added that week were nowhere
+near the top. `SortBy=DateLastContentAdded` is no alternative: albums answered
+`DateLastMediaAdded` as `0001-01-01`.
+
+Ask `/Items/Latest` instead — `userId`, `ParentId`, `IncludeItemTypes=Audio`,
+`GroupItems=true`, `Limit` — which sorts the **songs** by `DateCreated` and
+returns each one's album. That is the web client's Recently added query, and it
+returned the week's additions first. Three shape differences from `/Items`: the
+answer is a bare list, not an `Items` envelope; `Fields` is honoured and
+`UserData`/`ImageTags` are present; and with `isPlayed` omitted it applies the
+account's `HidePlayedInLatest` preference
+(`Jellyfin.Api/Controllers/UserLibraryController.cs`, `GetLatestMedia`), with
+`IsPlayed=true`/`false` each selecting one side and no value for both. Observed
+on an account with the preference on: 0 played albums among the first 200;
+`IsPlayed=true` → played only.
+
+## `People` costs the server per row
+
+`Fields=People` is linear in rows, server-side, on 10.11.11: about 7–25 ms and
+~7 KB per item. Measured on one server, the same query with and without the
+field:
+
+| Listing | Rows | Without | With |
+|---|---|---|---|
+| movies by `DateCreated`, `Limit=25` | 25 | 116 ms / 310 KB | 709 ms / 485 KB |
+| whole movie library | 1,775 | 0.65 s / 3.6 MB | 42.7 s / 14.7 MB |
+| `/Shows/NextUp` | 12 | 352 ms | 431 ms |
+| `/UserItems/Resume` | 8 | 116 ms | 268 ms |
+
+A People-only follow-up (`/Items?Ids=…&Fields=People`) is no cheaper — 663 ms
+for the same 25 — so the cost cannot be moved off the critical path, only kept
+off unbounded listings. The single-item `/Items/{id}` answer carries `People`
+without being asked (55 ms, ~22 KB) and is the place to get cast for one item.
+
 ## Reproducing a transcode bug
 
 **Use a fresh `PlaySessionId` for every attempt.** The server reuses a running job
@@ -249,6 +290,9 @@ for the same session, so replaying a failing URL after a successful one returns
 - `UserDataChanged` delivering another user's entire history.
 - `PlayCount` re-marking items watched after they were cleared.
 - An opaque 400 from a mismatched sort being read as an empty result.
+- Albums sorted by `DateCreated` presenting a rescan as recent additions.
+- `Fields=People` on a whole-library query turning a sub-second listing into a
+  40-second one, with nothing in the response to say why.
 
 ## Open questions
 

@@ -37,6 +37,7 @@ See [`../README.md`](../README.md) for how to install and use these, and
 
 *Logs, freezes, defects, and isolating a bad add-on.*
 
+- [`kodi-android-standby`](kodi-android-standby/SKILL.md) — What Kodi on Android TV keeps doing while the TV is in standby, and what it stops doing.
 - [`kodi-clean-profile`](kodi-clean-profile/SKILL.md) — Isolate a Kodi problem by reproducing it in a clean profile with no add-ons, then bisect to find the culprit.
 - [`kodi-freeze-diagnosis`](kodi-freeze-diagnosis/SKILL.md) — Work out why Kodi froze, hung, or stopped responding — including getting native backtraces off an unrooted Android TV box.
 - [`kodi-known-defects`](kodi-known-defects/SKILL.md) — Kodi and inputstream.adaptive defects confirmed by investigation, with their symptoms, upstream status, and how to recognise each from a log.

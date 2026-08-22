@@ -175,3 +175,5 @@ for nothing.
 - [`kodi-inputstream`](../kodi-inputstream/SKILL.md) — choosing what to hand the
   stream to
 - [`kodi-versions-abi`](../kodi-versions-abi/SKILL.md) — PVR API levels
+- [`kodi-android-standby`](../kodi-android-standby/SKILL.md) — `OnSystemSleep`
+  never arriving on an Android TV, and `OnSystemWake` arriving without it

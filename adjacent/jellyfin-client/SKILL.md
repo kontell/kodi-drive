@@ -10,9 +10,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: adjacent
-  verified-kodi: "21.3 Omega"
-  verified-platform: "Linux x86_64, Android TV"
-  verified-date: "2026-08-20"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-platform: "Linux x86_64, Android TV, Android phone/tablet"
+  verified-date: "2026-08-23"
   verified-method: "observed"
 ---
 
@@ -276,6 +276,24 @@ A People-only follow-up (`/Items?Ids=…&Fields=People`) is no cheaper — 663 m
 for the same 25 — so the cost cannot be moved off the critical path, only kept
 off unbounded listings. The single-item `/Items/{id}` answer carries `People`
 without being asked (55 ms, ~22 KB) and is the place to get cast for one item.
+
+## Driving another client's session from outside
+
+A session is identified by the `Client` name and `DeviceId` in the
+`Authorization` header, with the token. Any HTTP call carrying a client's exact
+`MediaBrowser Client="…", DeviceId="…", Version="…", Token="…"` acts **as that
+session**: a `POST /SyncPlay/New`, `/Join`, `/SetNewQueue`, `/Pause` or
+`/Unpause` made from a test host with a Kodi client's own fields creates or
+steers a group for that Kodi, and the resulting `SyncPlayGroupJoined` /
+`SyncPlayCommand` messages arrive at the real client over its own websocket —
+its log shows `--->[ syncplay group/<id> ] protocol v2` and the scheduled
+commands exactly as if the user had used the menu (Jellyfin 10.11.11, four Kodi
+clients driven this way for two days).
+
+That is the way to test a client's SyncPlay behaviour without driving its UI:
+read `deviceId` and the token off the client's own settings file, mirror the
+`Client` name, and script the server. Mismatch the `Client` name and the call
+makes a *new* session that the client never hears about.
 
 ## Reproducing a transcode bug
 

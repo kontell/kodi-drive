@@ -10,8 +10,8 @@ license: CC-BY-SA-4.0
 metadata:
   category: playback
   verified-kodi: "21.3 Omega, 22.0b1 Piers"
-  verified-platform: "Linux x86_64, Android TV"
-  verified-date: "2026-08-13"
+  verified-platform: "Linux x86_64, Android TV, Android phone/tablet"
+  verified-date: "2026-08-23"
   verified-method: "observed"
 ---
 
@@ -100,6 +100,23 @@ Kodi's actual consumption rate; the emit-time version drifts ahead whenever demu
 runs ahead of playback, and the reported time explodes. Invalidate the cached
 value on seek and flush, or the old delta survives a position change.
 
+**The demux head runs a queue depth ahead of what is playing.** Kodi 22 exposes
+that depth as `videoplayer.queuetimesize` (tenths of a second; options 0.5, 1, 2,
+4, 8 and 16 s, `xbmc/settings/PlayerSettings.cpp:27-32`, default 4 s), and
+`CVideoPlayer` reads it **once, in its constructor**
+(`xbmc/cores/VideoPlayer/VideoPlayer.cpp:775`), so a change over JSON-RPC applies
+to the next playback, never the running one. Kodi 21 has no such setting. Any
+time you report from the demuxer is a queue depth ahead of the picture unless you
+allow for it — at 3 % off 1× and a 4 s queue that is 120 ms of readout error.
+
+**A held rate re-detects the frame rate.** VideoPlayer measures fps from the
+packets it gets, so a stream stretched to 1.03× reads as 24.70 fps and the
+renderer is rebuilt once the new rate has been stable for the detection window:
+`CRenderManager::Configure - framerate changed from 23.98 to 24.70`, and back
+again when the rate returns (Piers, Android TV and Linux). It is one brief
+reconfigure, not a display-mode switch — none occurred on any of four devices —
+but it lands a few seconds after a seek, when the window is shortest.
+
 ## Capability flags change how Kodi treats your seeks
 
 - **Without `INPUTSTREAM_SUPPORTS_IDISPLAYTIME`**, `PAPlayer`'s seek path clamps
@@ -109,6 +126,43 @@ value on seek and flush, or the old delta survives a position change.
   any non-1× rate every OSD seek lands somewhere wrong.
 
 Both present as "seeking is broken" rather than as a missing capability.
+
+## Keep the packets your post-seek probe reads
+
+Kodi's own demuxer reads packets after `av_seek_frame` until one tells it where
+the seek landed, and it **keeps** that packet: `CDVDDemuxFFmpeg::SeekTime` probes
+with `ReadInternal(true)` (`xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp:1346`;
+the `keep` parameter is at `:1004`), so the first packet of the new position is
+delivered on the next read.
+
+inputstream.ffmpegdirect copied the loop and **frees** the packet instead
+(`src/stream/FFmpegStream.cpp:1492` at upstream `61944c6`), and so does every
+add-on forked from it. The keyframe at the new position never reaches Kodi, and
+every decoder starts mid-GOP after every seek, at 1× or any other rate:
+
+- Software HEVC logs it — ~46 `ffmpeg: [hevc] Could not find ref with POC N` /
+  `Error constructing the frame RPS` lines after each seek through the add-on,
+  **0** after the same seek through Kodi's own demuxer, and 0 once the add-on
+  kept its probe packets (Piers, Linux x86_64, a 1080p HEVC MKV).
+- h264 decoders concealed it; nothing was logged and nothing looked wrong.
+- One hardware AV1 decoder did not: on a Pixel 7 the MediaCodec decoder wedged
+  within a second of the seek — a `CDVDVideoCodecAndroidMediaCodec::GetPicture
+  dequeueInputBuffer failed` / `GetOutputPicture dequeueOutputBuffer failed`
+  storm, picture frozen or macroblocked while the clock ran on — and a second
+  round watchdog-rebooted the phone. A Bravia's AV1 decoder took the identical
+  sequence cleanly. With the probe packets kept, the Pixel played the same file
+  through seeks at up to 1.25×.
+
+So a seek probe must read through a path that does not consume, and deliver
+what it read before anything new — and it must survive the `DemuxFlush` Kodi
+issues right after `PosTime` (`CInputStreamAddon::SeekTime`,
+`xbmc/cores/VideoPlayer/DVDInputStreams/InputStreamAddon.cpp:626-631`). Probing
+through your own public read, once that read drains the pending queue first,
+hands the loop its own first packet back and spins on it when that packet
+carries no timestamp.
+
+Error concealment is why this survived for years: the symptom is "seeks look a
+bit rough", until a strict decoder meets it.
 
 ## Filters carry state across a flush
 
@@ -179,6 +233,15 @@ Set before `avformat_find_stream_info()`.
   `ENABLE_INTERNAL_FFMPEG`; there is no single answer, so probe rather than assume.
 - The startup-window threshold for filter rebuilds was tuned empirically on one
   add-on and is not a Kodi-defined boundary.
+- On a Galaxy Tab S5e (Piers, MediaCodec surface decode) an accurate seek to
+  13.048 s through an inputstream add-on restarted the clock at 12.70 s —
+  `demuxer seek to: 13048` then `VideoPlayer::Sync - Video - pts: 12804457` and
+  `GENERAL_RESYNC(12704457)` — i.e. ~350 ms early, while the desktop landed the
+  same seeks within tens of milliseconds. Whether MediaCodec cannot drop frames
+  to the accurate-seek point, or the add-on's `startpts` is what misleads it, was
+  not separated; Kodi's own demuxer on that device was not compared.
+- Kodi 21's fixed queue depth was not traced to a source line here; only the
+  absence of the setting was.
 
 ## See also
 

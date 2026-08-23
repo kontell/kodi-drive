@@ -10,9 +10,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: access
-  verified-kodi: "21.3 Omega"
-  verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-platform: "Linux x86_64, Android TV, Android phone"
+  verified-date: "2026-08-23"
   verified-method: "observed"
 ---
 
@@ -114,6 +114,35 @@ add-on's own "download queued" log line at 21:22:31.8, the row going active at
 21:23:02.7. 1.6 s to enqueue, 31 s to claim. Only the second half was worth
 looking at.
 
+## Settings writes are not saved, and two answer shapes
+
+`Settings.SetSettingValue` answers a **bare boolean**, not an object:
+
+```
+{"jsonrpc":"2.0","id":1,"method":"Settings.SetSettingValue",
+ "params":{"setting":"videoplayer.queuetimesize","value":40}}
+→ {"id":1,"jsonrpc":"2.0","result":true}
+```
+
+while `Settings.GetSettingValue` answers `{"value": …}`. A client that expects an
+object from both reads the write as failed, acts on "failed", and the setting is
+changed anyway.
+
+And the write is **not saved to disk**. `CSettingsOperations::SetSettingValue`
+(`xbmc/interfaces/json-rpc/SettingsOperations.cpp:246`) sets the value in memory
+and never calls `Save()` — the file contains `Save()` nowhere — so what reaches
+`guisettings.xml` is whatever Kodi holds at its next save, normally at exit. Two
+consequences: a value you changed and restored leaves no trace, which is the good
+case; and a value you changed but could not restore — a crash, a kill — is
+whatever was in memory at the last clean exit, which is not necessarily either
+the original or yours. A phone was found with its queue depth still at the
+session value and no record of the original, after a clean exit had saved the
+changed value. Record the original *before* the write, somewhere that persists.
+
+A setting this Kodi version does not have answers `Invalid params.` (code
+`-32602`), not a null value; that is how to branch on the version without asking
+for it.
+
 ## When you do need pixels, aim at them
 
 Anything transient is a target you have to aim at. Do not shoot blind at a moment
@@ -139,6 +168,8 @@ design limit: a message that has to scroll to make sense is a message to shorten
 - Infolabels return the previous item rather than nothing.
 - `speed: 1` reports a wedged player as a healthy one.
 - A single `time` reading, or a single end-to-end duration, confirms any theory.
+- `Settings.SetSettingValue` returns `true` rather than an object, and persists
+  nothing; a crash later keeps whatever Kodi last saved.
 
 ## Open questions
 

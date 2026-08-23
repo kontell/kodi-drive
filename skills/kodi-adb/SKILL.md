@@ -12,8 +12,8 @@ license: CC-BY-SA-4.0
 metadata:
   category: access
   verified-kodi: "21.3 Omega, 22.0b1 Piers"
-  verified-platform: "Android TV"
-  verified-date: "2026-08-18"
+  verified-platform: "Android TV, Android tablet, Android phone"
+  verified-date: "2026-08-23"
   verified-method: "observed"
 ---
 
@@ -153,6 +153,42 @@ adb -s $D push dist-unzipped/<addon.id> "$K/addons/"
 adb -s $D shell "monkey -p org.xbmc.kodi -c android.intent.category.LAUNCHER 1"
 ```
 
+### A new file may be refused outright — have Kodi create it
+
+On a Bravia 4K AE2 (Android 14) the add-on directories are `drwxr-s---
+u0_a233 ext_data_rw`: the `shell` user is in `ext_data_rw` but the directory
+has no group write, so overwriting an existing `-rw-rw----` file lands while
+creating one does not:
+
+```
+adb push tempo.py ".../addons/plugin.video.kofin/lib/kofin/syncplay/tempo.py"
+adb: error: failed to copy '…/tempo.py' to '…/tempo.py': remote couldn't create file: Permission denied
+```
+
+A whole-tree push of a build that adds a file aborts at that file with
+`adb: error: failed to read copy response`, leaving the files before it updated
+and the rest not — a mixed tree that Kodi will happily load. A Galaxy Tab S5e
+(Android 13) accepted the same tree, new files included; which of the two a
+device is can only be found out by pushing and checksumming.
+
+The way in is the process that owns the directory. Kodi's Python runs as the app
+uid, so stage the new file on `/sdcard` with a three-line installer and have
+Kodi run it over the EventServer:
+
+```sh
+adb -s $D push lib/kofin/syncplay/tempo.py /sdcard/stage/tempo.py
+adb -s $D push _install.py /sdcard/stage/_install.py      # shutil.copyfile(src, dst); write md5 to /sdcard/stage/done
+# RunScript(/sdcard/stage/_install.py) as an EventServer packet, sent from the device (see above)
+adb -s $D shell "cat /sdcard/stage/done"                  # 9ed82c5f… — compare with the local md5sum
+```
+
+Once the file exists, later pushes overwrite it normally. Then push the rest of
+the tree and compare a full `find -type f -exec md5sum {} +` against the local
+tree, ignoring `__pycache__`; a mixed tree looks fine from every other angle.
+Where a stage-and-`cat` from the shell is possible (the target file exists and
+is group-writable), it is the cheaper route for an overwrite that silently
+no-opped — and `cat /dev/null > target` first, because a push does not truncate.
+
 ### And a push can report success while writing nothing
 
 Overwriting an **existing** file under `Android/data` sometimes reports success
@@ -260,10 +296,11 @@ mere add-on enable/disable bounce. See
   took a push once and refused the next — and it is not whether Kodi is running,
   since it refused with the app force-stopped. Only the checksum check is
   reliable.
-- Creating a *new* file under `Android/data` was refused outright on this device
-  (`remote couldn't create file`), which sits badly with the claim above that
-  pushing a whole add-on tree succeeds. Both were observed, on different devices
-  and different Android versions; which variable separates them is untested.
+- Creating a *new* file under `Android/data` is refused on some devices (a
+  Bravia, Android 14) and accepted on others (a Galaxy Tab S5e, Android 13), with
+  the same `drwxr-s---`-style ownership visible from the shell on both. Which
+  variable separates them is untested; the RunScript route above works on
+  either.
 - Whether `screencap` captures DRM-protected video surfaces (rather than a black
   rectangle) has not been tested — assume it does not.
 - Pulling a native backtrace from an unrooted device is possible via

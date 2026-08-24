@@ -96,6 +96,19 @@ suppress "lost" until the connection has stayed down for a grace period, and
 "connected" unless a "lost" was actually shown. A `notifyConnection`-style
 opt-out is a courtesy, not a fix.
 
+Run the grace on a loop the add-on already has — the service's
+`waitForAbort(1)` tick — not on a `threading.Timer` armed per edge. The timer
+is a second clock on its own thread, and everything it needs is overhead the
+tick form does not: a cancel protocol, a generation stamp to outvote a callback
+that has already left `cancel()`'s reach, a shutdown hook, and a thread that
+holds the service alive — and it leaks out of any test that triggers a
+disconnect for some other reason. A timestamp stamped on disconnect, cleared on
+connect and checked once a second is the whole machine. Decide *and* toast under
+one lock: with the toast raised after the lock is released, a reconnect landing
+in that gap announces "connected" first and the stale "lost" queues behind it,
+so the last notice the user sees is wrong (inferred from a review of the first
+implementation and a test that reproduces the ordering, 2026-08-24).
+
 ## `OnSystemSleep` is a broadcast the TV may never send
 
 The whole Android sleep path hangs on one intent. Kodi registers

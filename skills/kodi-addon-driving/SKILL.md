@@ -11,7 +11,7 @@ metadata:
   category: python-addon
   verified-kodi: "21.3 Omega"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-date: "2026-08-27"
   verified-method: "observed"
 ---
 
@@ -33,6 +33,28 @@ kodi-remote get Addons.SetAddonEnabled '{"addonid":"<id>","enabled":true}'
 `Addons.SetAddonEnabled` has no profile argument — it acts on whichever profile
 is loaded. See [`kodi-profiles`](../kodi-profiles/SKILL.md), where that silently
 breaks isolation in an A/B comparison.
+
+**Re-deploying an already-enabled add-on's files restarts nothing.** For a tree
+with the same `addon.xml` version, `UpdateLocalAddons()` re-reads the manifest
+and leaves the running service alone, and `SetAddonEnabled(true)` on an add-on
+that is already enabled is a no-op. The service keeps the modules it imported,
+so a scenario run after the rsync measures the **previous** build — observed
+for twenty minutes on 21.3 before it was noticed. The deploy has to end with
+`enabled: false`, then `enabled: true`, and the proof is in the log rather
+than in the RPC replies:
+
+```sh
+# the deploy time is the ctime: git archive and rsync -a preserve mtimes
+deployed=$(stat -c %Z ~/.kodi/addons/<id>/lib/<pkg>/service.py)
+# then, after the disable/enable, the service's own start line must be newer
+kodi-logtail grep '<your service-start marker>'
+```
+
+Two things that look like proof and are not: a `RunScript` probe importing the
+package sees the new files (it is a fresh interpreter, and says nothing about
+the service), and `ps` shows the same `kodi.bin` either way. One thing that is:
+the deployed tree's `__pycache__/*.pyc` still carrying the old sources' size
+and mtime in their headers — nothing has imported the new files yet.
 
 ## Exercising a plugin directory
 

@@ -12,7 +12,7 @@ metadata:
   category: adjacent
   verified-kodi: "21.3 Omega, 22.0b1 Piers"
   verified-platform: "Linux x86_64, Android TV, Android phone/tablet"
-  verified-date: "2026-08-23"
+  verified-date: "2026-08-27"
   verified-method: "observed"
 ---
 
@@ -61,6 +61,33 @@ Filter on the message's own `UserId`, with two details that matter:
 - **Compare dashless and case-insensitively.** Jellyfin emits GUIDs both ways.
 - **Apply when the subject is absent**, rather than dropping. Otherwise you
   silently stop syncing userdata against any server that omits the field.
+
+## Planting another user's userdata, and the echo it sends
+
+From an admin session, `POST /UserItems/{id}/UserData?userId=<user>` with a
+partial `UpdateUserItemDataDto` (`{"PlaybackPositionTicks": 3232605000}`)
+sets that user's userdata and answers the stored row; `POST` /
+`DELETE /UserFavoriteItems/{id}?userId=<user>` flips the favourite. Both fire
+`UserDataChanged` to the user's sessions within a second or two. The message
+**fires again for an identical body** — re-sending the same ticks produced the
+same event and the client wrote the same values — so a client's own
+"did anything move" check has to live client-side; the server does not dedupe
+(12.0.0).
+
+## A virtual-folder rename is a new library, and the old one lingers
+
+`POST /Library/VirtualFolders/Name?name=A&newName=B` does not rename the view a
+client knows: library ids are derived from the path, so `B` arrives as a **new
+id** while the old one stays in `/UserViews` — for minutes even with
+`refreshLibrary=true`, and a library *deleted* hours earlier was still listed
+the same way. `POST /Library/Refresh` and polling `/UserViews` until the stale
+entry drops is what settles it (about six seconds on a small instance). A
+client that mirrors views by id sees no rename at all, only an addition it did
+not ask for and, later, a removal (12.0.0).
+
+Inferred from the same instance, and labelled as such: an empty Collections
+library is absent from `/UserViews` and appears there once its first collection
+exists (`POST /Collections`), shifting the order of everything after it.
 
 ## `PlayCount` is not the watched flag
 

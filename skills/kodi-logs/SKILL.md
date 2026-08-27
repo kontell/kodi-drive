@@ -9,9 +9,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: diagnosis
-  verified-kodi: "21.3 Omega"
+  verified-kodi: "21.3 Omega, 22.0 beta Piers"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-date: "2026-08-27"
   verified-method: "observed"
 ---
 
@@ -48,6 +48,12 @@ kodi-logtail errors
 Kodi rotates `kodi.log` to `kodi.old.log` on start, so a log that shrank means a
 restart happened. `kodi-logtail` detects this and reads from the top rather than
 silently returning nothing.
+
+A wait loop that polls a fixed window (`tail -c 100000 kodi.log | grep …`)
+instead of reading since the mark misses the line the moment enough debug
+output follows it — a busy sync writes 100 KB in seconds. Observed: a bounded
+wait for `Full sync completed` ran its full 800 s against a line that had
+already scrolled past. Mark first, then read from the mark, every time.
 
 ## Severities are lower-case, and a grep for ERROR finds nothing
 
@@ -97,6 +103,22 @@ turns on a large on-screen overlay, which ruins screenshots.
   <loglevel hide="true">1</loglevel>
 </advancedsettings>
 ```
+
+**Over JSON-RPC, on 21** — `Settings.SetSettingValue` with
+`{"setting":"debug.showloginfo","value":true}` answers `true` and takes effect
+at once (overlay included). **On 22 that setting id is gone:**
+`Settings.GetSettingValue` for `debug.showloginfo` returns `-32602 Invalid
+params`, and `Settings.GetSettings` for the `system`/`logging` category at
+`expert` level lists only `debug.extralogging`, `debug.setextraloglevel`,
+`debug.screenshotpath` and the three `eventlog.*` ids (22.0 beta,
+`20260825-ab5284f`). Whether a 22 box logs at debug level is read off the log
+itself — the `debug <general>` lines — not off a setting.
+
+**A profile switch can turn it back off.** Each profile has its own
+`guisettings.xml`; re-entering a profile that was created with logging off
+comes back with it off, and a request count taken afterwards reads zero.
+Check the setting (21) or the log (22) every time a profile changes hands,
+before counting anything.
 
 **Turn it on before you reproduce, not after.** With it off you lose the
 `CServiceAddonManager: stopping <addon>` lines that name which add-on blocked a

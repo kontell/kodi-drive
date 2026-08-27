@@ -13,7 +13,7 @@ metadata:
   category: kodi-data
   verified-kodi: "21.3 Omega, 22.0b1 Piers"
   verified-platform: "Linux x86_64, Android TV, armv7l"
-  verified-date: "2026-08-16"
+  verified-date: "2026-08-27"
   verified-method: "observed"
 ---
 
@@ -184,6 +184,31 @@ concurrent reader parse half a file, default to an empty whitelist, and skip
 items with no exception and no report — while the watermark advanced past them.
 Write to a temp file, `fsync`, then `os.replace`. And distinguish "missing or
 empty" (a fresh install) from "parses but is not an object" (raise loudly).
+
+## Deleting a `files` row cascades; an unreferenced one is an orphan
+
+MyVideos carries a `delete_file` trigger — identical in MyVideos131 (Omega) and
+MyVideos148 (Piers): `AFTER DELETE ON files` it deletes the row's `bookmark`,
+`settings`, `stacktimes`, `streamdetails` and `videoversion` rows and the
+videoversion `art`. So a resume point or stream details are taken by deleting
+the file row, and never need their own delete. The converse is the trap: a
+`files` row that no `movie`, `episode`, `musicvideo` or `videoversion` names is
+invisible to every join and survives every removal that goes through those
+tables — which is exactly what a second file row written under a plugin root
+path (the resume-dialog trick some plugin clients use) turns into once its item
+is removed. Audit for it directly:
+
+```sql
+SELECT COUNT(*) FROM files
+ WHERE idFile NOT IN (SELECT idFile FROM movie)
+   AND idFile NOT IN (SELECT idFile FROM episode)
+   AND idFile NOT IN (SELECT idFile FROM musicvideo)
+   AND idFile NOT IN (SELECT idFile FROM videoversion);
+```
+
+A pristine database answers 0; a Kodi that has played plugin items answers a
+handful of its own (rows Kodi creates for played paths), so measure against a
+baseline rather than against zero.
 
 ## Schema versions
 

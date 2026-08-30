@@ -12,7 +12,7 @@ metadata:
   category: python-addon
   verified-kodi: "21.3 Omega"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-date: "2026-08-30"
   verified-method: "sourced"
 ---
 
@@ -82,6 +82,37 @@ item never appears.
 
 **A `<visible>` condition cannot read an add-on setting.** Mirror the setting into
 a window property from your service, and gate on the property.
+
+**Test the condition without opening a single menu.** `XBMC.GetInfoBooleans`
+evaluates any condition string against the focused list item, so you can point a
+media window at a listing, focus a row, and ask whether your context item would
+appear — for every row kind in a loop, and for two versions of the expression
+side by side. It is the difference between checking one menu you happened to
+think of and checking all of them.
+
+```sh
+kodi-builtin 'ActivateWindow(Videos,videodb://movies/titles/,return)'
+kodi-remote post Input.Down
+kodi-remote post XBMC.GetInfoBooleans '{"booleans": [
+  "String.IsEqual(ListItem.DBTYPE,movie)",
+  "[String.IsEqual(ListItem.DBTYPE,movie) + !String.IsEmpty(ListItem.DBID)]",
+  "[String.IsEqual(ListItem.DBTYPE,movie) + String.IsEmpty(ListItem.DBID)]",
+  "(String.IsEqual(ListItem.DBTYPE,movie))"]}'
+```
+
+On a focused library movie (`DBTYPE=movie`, `DBID=3`) that answers `True`,
+`True`, `False`, `False`. The last one is the parenthesis trap above, caught in
+one call rather than as an item that mysteriously never appears. Note what that
+means: **an unparseable condition answers `False` here, indistinguishable from one
+that parsed and evaluated false.** The log line "Error parsing boolean expression"
+is what separates the two.
+
+Two things this does not do. It evaluates in the *current window* context rather
+than the context menu's, which is what makes it usable at all, but means a
+condition reading `Container.FolderPath` answers for the window you are looking
+at. And it tells you the condition's value, not that Kodi will draw the item —
+`CContextMenuManager` also drops a duplicate item, so confirm the real menu once
+with a screenshot after the sweep says yes.
 
 ## Settings schema
 

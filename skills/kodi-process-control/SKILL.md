@@ -11,7 +11,7 @@ metadata:
   category: diagnosis
   verified-kodi: "21.3 Omega"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-date: "2026-08-30"
   verified-method: "observed"
 ---
 
@@ -97,7 +97,8 @@ A new `pgrep -x kodi.bin` pid confirms the restart actually happened.
 **An add-on bounce is not a restart.** Disabling and re-enabling an add-on
 restarts its *service*, but Kodi caches each add-on's **language strings**
 (`resources/language/**/strings.po`) for the whole process lifetime. Newly added
-`30xxx` string ids therefore render **blank** until a full restart.
+`30xxx` string ids therefore render **blank** until something makes Kodi re-read
+them — a full restart, or the cheaper language round-trip below.
 
 Measured on Omega 21.3, one id, one file on disk, three readings: blank when the
 add-on was reinstalled, blank again after a disable/enable bounce, and correct
@@ -105,6 +106,41 @@ after Kodi genuinely restarted. Nothing about the file changed between them.
 
 When a new string shows empty despite a correct `strings.po`, that is the cache,
 not a bug in your file.
+
+**A restart is not the only thing that clears it — changing the language does
+too, and it is much cheaper.** Setting `locale.language` makes Kodi re-read the
+add-on's `strings.po` from disk, edits made since startup included, so switching
+away and back publishes a string change without losing playback and navigation
+state. It works for a language already loaded earlier in the same session, and
+for an id the add-on did not have when Kodi started.
+
+The read has to happen inside Kodi, because `getLocalizedString` is a Python
+API — a two-line `RunScript` probe is enough:
+
+```python
+# probe.py, run with RunScript(/abs/path/probe.py)
+import xbmc, xbmcaddon
+xbmc.log("probe: 30999=%r" % xbmcaddon.Addon("<addon.id>").getLocalizedString(30999))
+```
+
+```sh
+# 30999 appended to the installed strings.po *after* Kodi started
+kodi-builtin 'RunScript(/abs/path/probe.py)'        # probe: 30999=''
+kodi-remote post Settings.SetSettingValue \
+  '{"setting":"locale.language","value":"resource.language.en_gb"}'
+kodi-builtin 'RunScript(/abs/path/probe.py)'        # probe: 30999='PROBE-NEW-ID-99'
+```
+
+Measured on Omega 21.3 (Debian package), one process, pid unchanged and started
+34 minutes before the first reading: an id appended to the add-on's `en_gb`
+`strings.po` read back `''`, and after one `locale.language` write to the
+language it was already on it read back its text. An *edited* translation
+behaves the same way — a marker written into a `de_de` `strings.po` at 12:26
+rendered on screen after a switch to German at 12:27, in a process that had
+already loaded `de_de` once at 12:18.
+
+So the sequence that costs a restart is narrower than it looks: a bounce does
+not republish strings, a language round-trip does.
 
 **A skin's strings are not in that category.** A newly added skin id rendered on
 screen straight after `ReloadSkin()`, in a process whose pid had not changed for

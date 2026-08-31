@@ -12,7 +12,7 @@ metadata:
   category: diagnosis
   verified-kodi: "21.3 Omega"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-date: "2026-08-31"
   verified-method: "observed"
 ---
 
@@ -51,10 +51,15 @@ Always read back, and treat a timeout as wedged rather than slow:
 ```sh
 kodi-remote get Profiles.LoadProfile '{"profile":"clean"}'
 for i in $(seq 1 20); do
-  kodi-remote get Profiles.GetCurrentProfile '{"properties":["label"]}' | grep -q clean && break
+  kodi-remote get Profiles.GetCurrentProfile | grep -q clean && break
   sleep 1
 done
 ```
+
+`Profiles.GetCurrentProfile` takes no parameters here on purpose: `label` is not
+a requestable property and asking for it fails with `Invalid params`, so the
+read-back would never match and the loop would call a healthy switch wedged. See
+[`kodi-profiles`](../kodi-profiles/SKILL.md).
 
 **A modal dialog blocks the switch entirely.** A Yes/No dialog on the current
 profile prevents `LoadProfile` from completing at all, and by the time you notice

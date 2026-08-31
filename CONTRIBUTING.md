@@ -236,6 +236,20 @@ For agents finishing a session, [`/kodi-drive:contribute`](skills/contribute/SKI
 checks it for overlap against existing skills, scrubs it, and opens the PR with evidence filled from the
 actual session.
 
+### Never hard-wrap a report
+
+A report is anything a human or a tracker renders: an issue body, a PR description, a bug write-up, a diagnosis you hand back at the end of a session. In a report, **one paragraph is one line, however long it gets.** Do not insert line breaks mid-paragraph to hit a column width.
+
+Hard wrapping is a *commit message* convention and nothing else. Applied to a report it costs three things:
+
+- **Ragged output.** Every renderer reflows to its own width. Your 100-column wrap becomes a jagged block on a narrow screen and a short column stranded in white space on a wide one.
+- **Unreadable diffs.** Changing one word rewraps the paragraph, so a one-word edit arrives as a six-line rewrite and the actual change is invisible to a reviewer.
+- **Broken search.** `grep` and GitHub search both miss a phrase that straddles a break — which is exactly how someone checks for an existing report before filing a duplicate.
+
+Commit messages keep the usual convention: subject under ~72 characters, blank line, body wrapped at ~72. `git log` does not reflow, so there the wrap is doing real work.
+
+**Scope:** this governs reports. The prose files already in this repo — `CONTRIBUTING.md`, `SKILL.md`, `docs/` — are wrapped, and stay that way; do not reflow them as a drive-by.
+
 Commits: imperative subject, and say *why* in the body when the why is not obvious. The commit histories
 this repo was built from are full of one-line fixes whose reasoning took an hour to rediscover.
 

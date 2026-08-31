@@ -180,6 +180,13 @@ its actual output, per claim. **Paste the real output.** An empty evidence block
 is a deliberate signal that a claim is not ready, and it is visible to a reviewer
 in a way an unticked checkbox is not.
 
+**Write the PR body unwrapped — one paragraph per line, however long.** Hard
+wrapping is for the commit message, not for anything GitHub renders: a wrapped
+paragraph reflows raggedly, turns a one-word edit into a six-line diff, and hides
+a phrase from search across the break. Same rule for issue bodies and for the
+write-up you hand back at the end of a session. See
+[Never hard-wrap a report](../../CONTRIBUTING.md#never-hard-wrap-a-report).
+
 ## What fails silently
 
 - **A near-duplicate skill passes every check.** `validate.py` and `scrub.py`

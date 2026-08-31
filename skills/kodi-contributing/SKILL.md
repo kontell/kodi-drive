@@ -11,11 +11,40 @@ metadata:
   category: shipping
   verified-kodi: "22 master"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
-  verified-method: "sourced"
+  verified-date: "2026-08-31"
+  verified-method: "observed"
 ---
 
 # Contributing upstream
+
+## Kodi has an AGENTS.md, and it is about you
+
+Since [#29081](https://github.com/xbmc/xbmc/pull/29081) (merged 2026-08-31) the
+repository root carries an
+[`AGENTS.md`](https://github.com/xbmc/xbmc/blob/master/AGENTS.md), with a
+`CLAUDE.md` that is nothing but `@AGENTS.md`. **Read it before writing code, not
+before opening the PR.**
+
+It is deliberately narrow so far — it covers code comments only — and the team
+has said it will grow as their AI policy settles. Do not assume the scope you
+last saw is the current one.
+
+The current rules amount to: comments explain what the code cannot, and nothing
+else. No restating the code. No mentioning approaches tried, considered,
+replaced or removed. Nothing that only makes sense as a trace of how an agent
+arrived at the result. Prefer deleting a comment over rewording it. History,
+discarded alternatives and review rationale belong in the commit message or the
+PR description.
+
+**Comments are what their maintainers object to in agent-written PRs**, and that
+is why the file exists: the PR that added it states the team is varied on AI use
+but universally agrees AI comments are terrible, and calls this their most
+pressing concern.
+
+A mirror is kept at [`docs/upstream/xbmc-AGENTS.md`](../../docs/upstream/xbmc-AGENTS.md)
+for offline use, with the upstream commit it was taken from. It is a snapshot
+and the canonical file is upstream; `scripts/sync-upstream-docs.py` reports
+drift and CI runs it weekly.
 
 ## Kodi itself: what the CI enforces
 
@@ -98,6 +127,80 @@ public issue publishes your credentials.
 
 And check [`kodi-known-defects`](../kodi-known-defects/SKILL.md) first — the bug
 may already be filed.
+
+## Search the tracker before you invest, not after
+
+Search **as soon as you have a mechanism**, before writing the report, before
+writing a fix, and long before building anything. A defect worth finding is
+often a defect someone else has already found.
+
+```sh
+gh search issues --repo xbmc/xbmc --include-prs --limit 10 "<distinctive symbol>"
+```
+
+Search on symbols, not symptoms: a function or member name from the stack —
+`RegisterSettingsLoadedCallback`, `MHD_stop_daemon` — finds the thread that
+matters, where "kodi hangs on profile switch" finds nothing.
+
+**`--include-prs` is not optional.** The fix can be sitting in an open PR while
+the issue is still open and misdiagnosed, and a search that returns issues only
+tells you the defect is unreported when it is a day from merging.
+
+**The trap: `--state all` is invalid.** `gh` accepts only `{open|closed}` there,
+and rejects the command:
+
+```
+invalid argument "all" for "--state" flag: valid values are {open|closed}
+```
+
+Omit `--state` entirely to search both. With `2>/dev/null` in the pipeline —
+which is how it usually gets written — the rejection is swallowed and the empty
+output reads exactly like "no results".
+
+Read the open PRs that touch the file, not only the ones whose titles match. A
+fix often arrives inside a PR opened for something else entirely, added in
+response to review.
+
+## Writing for upstream, on someone's behalf
+
+Almost everything an agent publishes upstream is posted under a human's account.
+Four rules follow from that, and the first two are not stylistic.
+
+**Do not ghost-write.** Never put a first-person claim of experience into the
+human's voice — "I hit this on my Bravia", "I rebuilt it and the crash is gone".
+The agent did not, and the human cannot defend the detail when a reviewer asks
+which build, which device, what else was running. Attribute to the evidence
+instead: *"this reproduces on a 22.0-BETA1 Android TV box"*, *"a core dump taken
+from a separate reproduction shows"*. That reads as more careful rather than
+less, because it says exactly what is being claimed. The failure is silent — no
+reader can tell a fabricated first-person detail from a real one, so the whole
+report stops being trusted at once rather than one line of it.
+
+**Sign as a bot by default.** One line at the top: *"This comment was written by
+Claude and posted by @user."* This is already the local norm — xbmc threads
+carry both that form and `<!-- AI-generated using ... -->` disclosures. Sign by
+default and let the human remove it, because the reverse is unrecoverable: being
+found out costs their credibility on every thread they have posted to. It also
+tells a maintainer how much scrutiny the text has had before they spend review
+time on it.
+
+**Be concise.** State the mechanism once and refer back to it, rather than
+re-explaining it under the fix and again in the summary. Cut the reasoning you
+needed to convince yourself; a maintainer triaging fifty issues reads the first
+screen, and length reads as noise rather than thoroughness.
+
+**Leave out irrelevant history.** Do not narrate the investigation — what was
+tried first, the tool that did not work, the theory abandoned. This is the same
+rule Kodi applies to code comments in
+[`AGENTS.md`](https://github.com/xbmc/xbmc/blob/master/AGENTS.md), and it is
+what their maintainers are most vocal about, so it is worth internalising rather
+than working around.
+
+The exception is where that rule gets misapplied: **a negative result the reader
+would otherwise repeat is a finding, not history.** *"Offline gdb resolves
+nothing against a Flatpak core"* saves the next person an hour and belongs in
+the write-up. *"I first tried offline gdb"* is about you and belongs nowhere.
+The test is whether the reader is about to make the same mistake.
 
 ## What fails silently
 

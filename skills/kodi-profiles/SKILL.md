@@ -10,9 +10,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: diagnosis
-  verified-kodi: "21.3 Omega"
+  verified-kodi: "21.3 Omega, 22 Piers"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-date: "2026-08-31"
   verified-method: "observed"
 ---
 
@@ -38,11 +38,22 @@ between profiles.
 kodi-remote get Profiles.LoadProfile '{"profile":"test"}'
 
 for i in $(seq 1 20); do
-  current=$(kodi-remote get Profiles.GetCurrentProfile '{"properties":["label"]}')
+  current=$(kodi-remote get Profiles.GetCurrentProfile)
   case "$current" in *'"test"'*) echo "switched"; break ;; esac
   sleep 1
 done
 ```
+
+**Call `Profiles.GetCurrentProfile` with no parameters.** Asking for `label`
+looks natural and fails: `Profiles.Fields.Profile` enumerates only `thumbnail`
+and `lockmode`, so `'{"properties":["label"]}'` is rejected with `Invalid
+params` on both 21.3 and 22. `label` needs no requesting — it is
+`Item.Details.Base.label`, `required: true`, and is always in the result.
+
+The failure mode is the reason it matters here. A read-back that errors every
+iteration never matches, so the loop above runs its full 20 seconds and reports
+a healthy switch as wedged — a false negative inside the check written to catch
+a false positive.
 
 Once wedged, restarting Kodi is usually the only fix — see
 [`kodi-process-control`](../kodi-process-control/SKILL.md), and note the wrapper

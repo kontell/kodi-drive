@@ -10,8 +10,8 @@ license: CC-BY-SA-4.0
 metadata:
   category: diagnosis
   verified-kodi: "22.0-BETA1 Piers, 21.3 Omega"
-  verified-platform: "Android TV, Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-platform: "Android TV, Linux x86_64, Linux Flatpak"
+  verified-date: "2026-08-31"
   verified-method: "observed"
 ---
 
@@ -94,6 +94,50 @@ blocking add-on.
 One Android shell trap: **Android uses mksh, where `r` is a reserved alias**
 (`fc -e -`). Do not name a helper function `r`.
 
+## Native backtraces from a Flatpak Kodi
+
+Three things get in the way, in this order.
+
+**The crashlog is empty of what you want.** A Flatpak build ships without gdb,
+so `kodi_crashlog-*.log` contains `gdb not installed, can't get stack trace.`
+and nothing else but the log. Go to the core dump on the host instead:
+
+```sh
+coredumpctl list --since '-30 min'
+coredumpctl dump <PID> --output=core.kodi
+```
+
+**Offline gdb resolves nothing.** Loading that core with the host's gdb walks
+the *host's* libc, which is not the one inside the sandbox, and the unwind dies
+in `?? ()` after a frame or two. `--solib-search-path` at the runtime does not
+rescue it either, because the whole tree has to match.
+
+**Attach live, with the sandbox as the sysroot.** `/proc/<PID>/root` is the
+process's own filesystem view, so gdb finds the exact libraries it was built
+against:
+
+```sh
+gdb -p <PID> -ex 'set sysroot /proc/<PID>/root' -ex 'thread apply all bt' -batch
+```
+
+That is what turns an unusable stack into a readable one. Measured on a hung
+Kodi 22 beta: `?? ()` at every frame before, and after —
+
+```
+Thread 1 (LWP 1312086 "kodi.bin"):
+#3  __pthread_clockjoin_ex ()  libc.so.6
+#4  MHD_stop_daemon ()         libmicrohttpd.so.12
+```
+
+The binary is still stripped, so expect shared-library symbols and Kodi's
+exported ones only; static and inlined functions stay `?? ()`, as they do on
+Android. That is usually enough, because the frame you need is the one calling
+into a library.
+
+**Take the backtrace before killing anything.** A live attach is the only route
+that works here, so a hang that has already been force-stopped cannot be
+diagnosed this way.
+
 ## The signature that predicts a whole-UI freeze
 
 On Kodi 22 beta, `CJobManager` can die silently and the UI freezes **up to an
@@ -131,6 +175,9 @@ its upstream status. Recovery is a force-stop; nothing else clears it.
 - The job manager dies with **no error line at all** — only an absence.
 - A short CPU sample can read 4x the true average and invent a runaway spin.
 - An error-only add-on log proves nothing by being quiet.
+- A Flatpak crashlog reports `gdb not installed` and looks like the crash
+  produced no backtrace at all, when the core dump is sitting in
+  `coredumpctl`.
 
 ## Open questions
 

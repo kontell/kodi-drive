@@ -12,7 +12,7 @@ metadata:
   category: access
   verified-kodi: "21.3 Omega, 22.0b1 Piers"
   verified-platform: "Linux x86_64, Android TV, Android phone"
-  verified-date: "2026-08-23"
+  verified-date: "2026-09-01"
   verified-method: "observed"
 ---
 
@@ -143,6 +143,40 @@ A setting this Kodi version does not have answers `Invalid params.` (code
 `-32602`), not a null value; that is how to branch on the version without asking
 for it.
 
+## An omitted `id` stops a read method running at all
+
+A request with no `id` is a JSON-RPC notification, so Kodi returns an empty
+string instead of a response. That much is the spec. The part that is not is
+that Kodi also **refuses to execute** the method when its declared permission is
+`ReadData` — and `JSONRPC.NotifyAll` is declared `ReadData`, because it only
+reads, whatever it goes on to send.
+
+`OPERATION_PERMISSION_NOTIFICATION` is every permission except `ReadData`
+(`xbmc/interfaces/json-rpc/JSONRPCUtils.h:151`); a request without an `id` is
+checked against it (`xbmc/interfaces/json-rpc/JSONServiceDescription.cpp:1378`);
+and `NotifyAll` declares `"permission": "ReadData"`
+(`xbmc/interfaces/json-rpc/schema/methods.json:222`). So the split falls along
+read versus write, which is not where a caller would put it.
+
+Both halves, measured from a script inside Kodi:
+
+```
+Application.SetVolume(40)  id-less -> ''  volume now 40      ControlPlayback: ran
+JSONRPC.NotifyAll          id-less -> ''  no announcement    ReadData: dropped
+JSONRPC.NotifyAll          with id -> {"id":1,...,"result":"OK"}   delivered
+```
+
+The `NotifyAll` half was checked with an `xbmc.Monitor` in the sending process:
+of two requests differing only in the `id`, `onNotification` received the one
+that had it and never the other. Nothing was logged either way, on either
+platform.
+
+**The trap is a helper.** Measured in one add-on: its JSON-RPC wrapper offered a
+`no_response` flag, implemented by omitting the `id`. That is correct for
+`SetVolume` and turns every `NotifyAll` the add-on sent into a no-op that still
+reported success — the add-on's whole outbound message bus was dead, with no
+error anywhere. Keep the `id` on anything whose permission is `ReadData`.
+
 ## When you do need pixels, aim at them
 
 Anything transient is a target you have to aim at. Do not shoot blind at a moment
@@ -170,6 +204,8 @@ design limit: a message that has to scroll to make sense is a message to shorten
 - A single `time` reading, or a single end-to-end duration, confirms any theory.
 - `Settings.SetSettingValue` returns `true` rather than an object, and persists
   nothing; a crash later keeps whatever Kodi last saved.
+- A request with no `id` runs `SetVolume` and drops `NotifyAll`, returning the
+  same empty string for both.
 
 ## Open questions
 

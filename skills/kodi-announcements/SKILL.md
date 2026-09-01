@@ -10,9 +10,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: python-addon
-  verified-kodi: "21.3 Omega"
-  verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-platform: "Linux x86_64, Android TV"
+  verified-date: "2026-09-01"
   verified-method: "observed"
 ---
 
@@ -131,8 +131,10 @@ moved on again.
 
 When sending your own messages with `JSONRPC.NotifyAll`, the sender string must
 match the receiver's constant exactly. A near miss produces no log line, no
-error, and a cheerful `"result":"OK"`. See
-[`kodi-addon-driving`](../kodi-addon-driving/SKILL.md).
+error, and a cheerful `"result":"OK"`. Omitting the JSON-RPC `id` is worse: the
+announcement is never sent at all. See
+[`kodi-addon-driving`](../kodi-addon-driving/SKILL.md) and
+[`kodi-jsonrpc`](../kodi-jsonrpc/SKILL.md#an-omitted-id-stops-a-read-method-running-at-all).
 
 ## What fails silently
 

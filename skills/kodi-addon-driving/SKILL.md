@@ -9,9 +9,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: python-addon
-  verified-kodi: "21.3 Omega"
-  verified-platform: "Linux x86_64"
-  verified-date: "2026-08-27"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-platform: "Linux x86_64, Android TV"
+  verified-date: "2026-09-01"
   verified-method: "observed"
 ---
 
@@ -126,6 +126,11 @@ Two rules follow:
    first and confirm the add-on logs its rejection. Silence means you never
    arrived; a rejection means you did.
 
+**Keep the `id` on the request.** `NotifyAll` is declared a `ReadData` method,
+and Kodi will not execute a `ReadData` method sent without one — same empty
+return, no announcement, nothing logged. See
+[`kodi-jsonrpc`](../kodi-jsonrpc/SKILL.md#an-omitted-id-stops-a-read-method-running-at-all).
+
 Guarded messages are reachable too where the guard is a nonce the add-on keeps on
 disk — read it and include it in the payload. That turns a sixteen-item cleanup
 from sixteen dialog answers into a loop.
@@ -160,6 +165,8 @@ timeout rather than an instant refusal, which is what a real outage looks like.
 - `Files.GetDirectory` on a `library://` path whose node is not in the
   active profile tree returns `Invalid params.`, not the shipped file.
 - A `NotifyAll` sender mismatch returns `"OK"` and does nothing.
+- A `NotifyAll` sent without a JSON-RPC `id` does nothing either, and does not
+  even return `"OK"`.
 - An action route logs a `GetDirectory` failure even when it succeeded.
 - `SetAddonEnabled` acts on the loaded profile, not the one you meant.
 

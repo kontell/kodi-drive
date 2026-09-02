@@ -4,14 +4,15 @@ description: >
   Take a Kodi screenshot and actually read it, rather than filing it next to a
   claim of success. Use whenever you are verifying a visual change, comparing
   before and after, or about to say a skin edit worked. Covers when to shoot so
-  you do not catch an animation, what to look for in the image, and what an
-  "identical" diff is really telling you.
+  you do not catch an animation, what to look for in the image, what an
+  "identical" diff is really telling you, and what to do when Kodi's own
+  screenshot action produces no file and no log line (Kodi 22).
 license: CC-BY-SA-4.0
 metadata:
   category: access
-  verified-kodi: "21.3 Omega"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-date: "2026-09-02"
   verified-method: "observed"
 ---
 
@@ -31,6 +32,42 @@ kodi-shot --width 1920    # custom width
 
 Then **read the file back**. An unread screenshot is worth nothing — do not take
 one and move on.
+
+### When no file appears (Kodi 22)
+
+On Kodi 22 the screenshot action is asynchronous: `TakeScreenshot()` submits a
+capture to the render capture service and does the folder lookup, naming and
+write in a callback — and that callback **returns silently when the capture
+delivered no pixels** (`xbmc/utils/Screenshot.cpp:148-176` at
+`22.0b1-Piers-911-g8a80976219`: `if (!result.pixels) return;` runs before the
+"Saving screenshot" log line). So `Input.ExecuteAction {"action":"screenshot"}`
+answers `OK`, `debug.screenshotpath` is set and writable, and nothing appears —
+no file, no warning, no error. `kodi-shot` reports it as "no new screenshot
+appeared". A capture that produced pixels always logs
+`Saving screenshot <path>` at debug level, so **the absence of that line is the
+diagnosis**: the render system captured nothing. Observed on a Piers flatpak
+using the X11 windowing system and running as a window on a desktop rather than
+fullscreen; whether a fullscreen X11 Kodi 22 captures is not settled (see
+Open questions).
+
+The way round it is to grab the window from the X server instead, on the Kodi
+host, by window id:
+
+```sh
+export DISPLAY=:0
+xwininfo -root -tree | grep -E '^\s+0x[0-9a-f]+ "Kodi"'
+#   0x6a00002 "Kodi": ("Kodi" "Kodi")  1142x642+0+0  +38+1340
+import -window 0x6a00002 shot.png          # ImageMagick; -resize 1280x to downscale
+```
+
+`import -window <id>` captures exactly that window. **Never grab the root
+window** on a shared display: that is the whole desktop, terminals and browsers
+included, and it goes straight into a transcript.
+
+Kodi's X11 window carries **no `_NET_WM_PID`** (`xprop -id <id> _NET_WM_PID` →
+"not found"), same `WM_CLASS` and title on every instance, so two Kodis on one
+display cannot be told apart from X properties alone. Grab each `"Kodi"` window
+and identify them by content, or run one at a time.
 
 Let the UI settle first, or you will misread a frame mid-animation:
 
@@ -103,6 +140,13 @@ cannot reconstruct it from a file path.
 - The settle times above are rules of thumb from one skin on one machine. A
   slower device — a TV box, a Pi — will need longer, and the failure mode is a
   misread rather than an error, so err high there.
+- The silent no-pixels capture was seen on one Kodi 22 build (a Piers flatpak,
+  X11 windowing, windowed on a desktop). Whether the same Kodi captures when
+  fullscreen, on Wayland, or on GBM has not been checked; the log line is the
+  test either way.
+- The X-Resource extension maps X clients to process ids and would tell two
+  Kodi windows apart; the box this was seen on had no `xrestop`, `wmctrl`,
+  `xdotool` or python3-xlib to query it with, so that route is untested.
 
 ## See also
 

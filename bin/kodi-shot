@@ -110,7 +110,9 @@ done
 
 if [ -z "$new" ]; then
     echo "kodi-shot: no new screenshot appeared in $shot_dir within ${KODI_SHOT_TIMEOUT:-5}s" >&2
-    echo "  Kodi may have refused the action, or may be writing somewhere else." >&2
+    echo "  Kodi may have refused the action, may be writing somewhere else, or (Kodi 22)" >&2
+    echo "  captured no pixels and said nothing: no 'Saving screenshot' line in kodi.log." >&2
+    echo "  See kodi-screenshot-review for the X window grab that works instead." >&2
     exit 1
 fi
 

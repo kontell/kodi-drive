@@ -161,6 +161,14 @@ sees at a glance, so check the string in the source before calling the text
 wrong. And when it is the user's glance you care about, ~33 characters is a
 design limit: a message that has to scroll to make sense is a message to shorten.
 
+## Native music playlist additions
+
+On Kodi 22 beta 2, `Playlist.Add` with one array of `{"songid": id}` items kept the array's order and produced fully tagged music-library entries on Android TV and Linux Flatpak. A large mixed queue was checked by comparing every returned playlist file with its saved stable item ID. An `OK` response to additions by `{"file": path}` did **not** prove library resolution: the same Android queue came back as bare file items without song IDs or album fields. Validate each saved song ID against its current library path before using it; IDs can be reused after a rebuild (see [`kodi-playback-resume`](../kodi-playback-resume/SKILL.md)).
+
+Source: `CAudioLibrary::FillFileItemList` in `xbmc/interfaces/json-rpc/AudioLibrary.cpp` calls `CFileItemList::Sort` as it fills the array. `CFileItemList::Sort` returns once the list already has that sort description (`xbmc/FileItemList.cpp`), so later one-song additions to the same array retain their input order. This matched both live Kodi 22 targets; verify order on the target when using a different Kodi version.
+
+For playback-first restoration at a saved position, append the songs after the playing item with that array. Prepend earlier songs in reverse saved order using a JSON-RPC **batch of separate single-item** `Playlist.Insert` requests at position `0`. `CPlayListPlayer::Insert` increments the current playlist index once per request (`xbmc/PlayListPlayer.cpp`); one `Playlist.Insert` containing an array increments it only once. Python `xbmc.PlayList.add(..., index=0)` calls the underlying playlist's `Insert` directly (`xbmc/interfaces/legacy/PlayList.cpp`) and does not make that player-index adjustment. The separate-request batch preserved both order and playing position in live tests.
+
 ## What fails silently
 
 - `*.GetProperties` with no arguments returns `null`, not an error.

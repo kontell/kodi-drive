@@ -4,15 +4,15 @@ description: >
   Build a Kodi binary add-on that installs on the Kodi versions you meant, on the
   systems your users have. Use when building a PVR, inputstream, screensaver or
   visualisation add-on, when a .so fails to load on a user's box but works on
-  yours, or when CI produces a zip that will not install. Covers the ABI floor
-  being set by the build host rather than the code, and the stale files a rebuild
-  leaves behind.
+  yours, when CI produces a zip that will not install, or when you need another
+  Windows architecture from CI. Covers the ABI floor being set by the build host
+  rather than the code, and the stale files a rebuild leaves behind.
 license: CC-BY-SA-4.0
 metadata:
   category: binary-addon
   verified-kodi: "21.3 Omega, 22.0b1 Piers"
   verified-platform: "Linux x86_64, Windows x86_64"
-  verified-date: "2026-08-13"
+  verified-date: "2026-10-08"
   verified-method: "observed"
 ---
 
@@ -39,6 +39,50 @@ modules across piecemeal, building FFmpeg separately, and then fixing link
 ordering by hand. Each step is individually plausible and the whole thing is work
 the depends system already does. It is easy to do this *with the full Kodi source
 already cloned and unused*.
+
+## Apple, and the other Windows architectures
+
+macOS, iOS and tvOS build from one Mac with a toolchain file and no depends
+tree: see [`kodi-apple-targets`](../kodi-apple-targets/SKILL.md).
+
+The Visual Studio generator cross-builds Windows from an x64 host. Observed on a
+GitHub `windows-2022` runner, with an add-on whose one dependency is jsoncpp:
+
+```sh
+cmake -B build -G "Visual Studio 17 2022" -A <Win32|x64|ARM64> -T host=x64 \
+  -DADDONS_TO_BUILD=<id> ... <kodi-src>/cmake/addons
+cmake --build build --config Release --target <id>
+```
+
+The three DLLs carried PE machine values `0x014c`, `0x8664` and `0xaa64`. The
+Windows Store variant compiled and linked with two more arguments, which are the
+ones `pvr.iptvsimple`'s Azure pipeline uses:
+
+```
+-DCMAKE_SYSTEM_NAME=WindowsStore -DCMAKE_SYSTEM_VERSION=10.0.22621.0
+```
+
+A cross-build that fell back to the host's architecture would still configure,
+compile, package and upload. Check the artifact, not the exit code — here, the
+machine field of the PE header:
+
+```sh
+python -c "import struct,sys; d=open(sys.argv[1],'rb').read(); \
+o=struct.unpack_from('<I',d,0x3c)[0]; print('%04x' % struct.unpack_from('<H',d,o+4)[0])" <lib>.dll
+```
+
+## The Kodi checkout can be sparse
+
+The `cmake/addons` superbuild was given only these paths from the Kodi tree, on
+Linux, Android, Windows and the Apple targets alike:
+
+```
+version.txt
+xbmc/interfaces/json-rpc/schema/version.txt
+cmake/
+xbmc/addons/AddonBindings.cmake
+xbmc/addons/kodi-dev-kit/include/kodi/
+```
 
 ## The ABI floor is set by the build host, not by your code
 
@@ -106,6 +150,12 @@ kodi-addons-dev  libjsoncpp-dev  m4  autoconf  automake  libtool  autopoint
 The superbuild needs a Kodi **source tree** matching the target version, and
 builds external dependencies itself.
 
+In a `debian/control`, upstream add-ons declare `Build-Depends: kodi-addon-dev`,
+singular. Debian 13 ships the package as `kodi-addons-dev` and it does not
+provide the singular name, so that line is unsatisfiable there.
+`kodi-addon-dev | kodi-addons-dev` satisfied `dpkg-buildpackage` in a `debian:13`
+container.
+
 ## Version substitution
 
 Use `addon.xml.in` with the version substituted by CMake, so the manifest and the
@@ -170,6 +220,8 @@ Fixing undefined behaviour is correct. Changing the output is not.
 - A newer build host raises your glibc floor with no source change.
 - `LDFLAGS` not taking effect leaves dynamic dependencies you thought were gone.
 - A removed file survives in the zip and the install tree.
+- A cross-build that produced the host's architecture is green from configure to
+  upload.
 - An escaped exception crosses the C ABI as undefined behaviour.
 - A "cleanup" of a hash function reassigns every persisted id.
 
@@ -179,9 +231,14 @@ Fixing undefined behaviour is correct. Changing the output is not.
   but the exact symbols will differ elsewhere — assert the floor rather than
   matching this list.
 - Whether the superbuild forwards linker flags in Kodi 22 has not been retested.
+- The Windows i686, arm64 and Store builds were compiled and inspected, and
+  none was loaded by a Kodi on that platform.
 
 ## See also
 
 - [`kodi-android-ndk`](../kodi-android-ndk/SKILL.md) — cross-compiling for Android
+- [`kodi-apple-targets`](../kodi-apple-targets/SKILL.md) — macOS, iOS and tvOS
 - [`kodi-versions-abi`](../kodi-versions-abi/SKILL.md) — which Kodi will accept it
 - [`kodi-addon-release`](../kodi-addon-release/SKILL.md) — shipping the result
+- [`kodi-binary-repo`](../kodi-binary-repo/SKILL.md) — the platforms the official
+  repository builds, and with what

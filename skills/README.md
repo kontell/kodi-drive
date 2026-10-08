@@ -77,6 +77,7 @@ See [`../README.md`](../README.md) for how to install and use these, and
 *Building it so it loads on someone else's machine.*
 
 - [`kodi-android-ndk`](kodi-android-ndk/SKILL.md) — Cross-compile a Kodi binary add-on and its dependencies for Android.
+- [`kodi-apple-targets`](kodi-apple-targets/SKILL.md) — Build a Kodi binary add-on for macOS, iOS and tvOS from one Mac, without bootstrapping Kodi's depends tree.
 - [`kodi-binary-build`](kodi-binary-build/SKILL.md) — Build a Kodi binary add-on that installs on the Kodi versions you meant, on the systems your users have.
 - [`kodi-binary-settings`](kodi-binary-settings/SKILL.md) — Build a settings UI for a binary Kodi add-on, including action buttons the API does not support.
 
@@ -102,6 +103,7 @@ See [`../README.md`](../README.md) for how to install and use these, and
 *Versions, releases, and getting a change accepted upstream.*
 
 - [`kodi-addon-release`](kodi-addon-release/SKILL.md) — Package and release a Kodi add-on without shipping a broken or incomplete zip.
+- [`kodi-binary-repo`](kodi-binary-repo/SKILL.md) — What Kodi's official binary add-on repository builds, for which platforms, and what makes a build reach users.
 - [`kodi-contributing`](kodi-contributing/SKILL.md) — Get a change accepted into Kodi itself, or an add-on into the official repository.
 - [`kodi-versions-abi`](kodi-versions-abi/SKILL.md) — Pick a version number and an API level that the Kodi versions you care about will actually accept.
 

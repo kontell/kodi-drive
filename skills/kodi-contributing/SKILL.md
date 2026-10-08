@@ -112,6 +112,11 @@ are strict:
 Full detail: [Submitting Add-ons](https://kodi.wiki/view/Submitting_Add-ons) and
 [Add-on rules](https://kodi.wiki/view/Add-on_rules).
 
+**Binary add-ons do not arrive this way.** Their source is never copied into a
+repository: a two-file definition points at yours, and Team Kodi's builder
+compiles it for nine platforms. The rules above still apply; the mechanics are
+in [`kodi-binary-repo`](../kodi-binary-repo/SKILL.md).
+
 ## Before you file a Kodi bug
 
 Two things save a maintainer's time and make the report actionable:
@@ -222,4 +227,6 @@ The test is whether the reader is about to make the same mistake.
 - [`kodi-versions-abi`](../kodi-versions-abi/SKILL.md) — which Kodi versions your
   add-on will install on
 - [`kodi-addon-release`](../kodi-addon-release/SKILL.md) — building the artifact
+- [`kodi-binary-repo`](../kodi-binary-repo/SKILL.md) — how a binary add-on is
+  submitted, built and deployed
 - [`kodi-known-defects`](../kodi-known-defects/SKILL.md) — check before filing

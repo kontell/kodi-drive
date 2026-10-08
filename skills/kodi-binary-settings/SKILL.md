@@ -12,7 +12,7 @@ metadata:
   verified-kodi: "21.3 Omega, 22.0b2 Piers"
   verified-platform: "Linux x86_64"
   verified-date: "2026-10-08"
-  verified-method: "observed"
+  verified-method: "sourced"
 ---
 
 # Settings in a binary add-on
@@ -185,6 +185,27 @@ kodi::addon::SetSettingString("id", value);
 your add-on is genuinely single-instance, global settings are simpler and the two
 should not be mixed.
 
+### A `list[string]` setting logs an error every time settings are handed over
+
+Observed on 22.0b2, on a PVR add-on with three `list[string]` settings: one line
+per list setting, at `error` level, when the add-on loads and again whenever a
+setting is written —
+
+```
+error <general>: Unknown setting type of '<setting id>' for <Add-on name>
+```
+
+Sourced: `CAddonDll::TransferSettings` switches on the setting's type with cases
+for boolean, integer, number and string, and no case for a list
+(`xbmc/addons/binary-addons/AddonDll.cpp:395-469` at `22.0b2-Piers`). A list
+lands in `default:` (`:471-488`), which logs that line and then passes
+`setting->ToString()` to the add-on's string callback anyway. `21.3-Omega` has
+the same switch at `:398` and the same `default:` at `:473`.
+
+So the setting keeps working and the log gains an error that reads like a fault
+in the add-on. The lines come from Kodi's side of the transfer, before the
+add-on's callback runs.
+
 Labels are string ids from `resources/language/resource.language.en_gb/strings.po`.
 
 ## What fails silently
@@ -196,6 +217,8 @@ Labels are string ids from `resources/language/resource.language.en_gb/strings.p
   server-side sessions leak.
 - `RunScript(<id>,…)` on a binary add-on that declares no script extension: one
   warning in the log, no script run, and a button that does nothing.
+- A `list[string]` setting works, and puts an `error` line in the log on every
+  settings transfer.
 
 ## Open questions
 
@@ -212,6 +235,10 @@ Labels are string ids from `resources/language/resource.language.en_gb/strings.p
   binary add-on was available in that location to press the button on.
 - Whether `xbmc.python.script` in place of `xbmc.python.library` would also put a
   binary add-on in the Program add-ons list was not tried.
+- The transfer switch has no case for an action setting either. Whether a
+  `type="action"` setting therefore logs the same `Unknown setting type` line was
+  not run: the add-on the list lines were seen on declares its buttons as
+  `type="string"` with a button control.
 
 ## See also
 

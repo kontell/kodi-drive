@@ -9,9 +9,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: diagnosis
-  verified-kodi: "21.3 Omega"
+  verified-kodi: "21.3 Omega, 22.0b2 Piers"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-30"
+  verified-date: "2026-10-08"
   verified-method: "observed"
 ---
 
@@ -81,6 +81,12 @@ what catches the exit:
 kodi-builtin 'RestartApp()'   # Kodi exits 65; the wrapper loops and relaunches
 ```
 
+The builtin restarts a Flatpak Kodi the same way. On a 22.0b2 Flatpak the
+process list, seen from the host, is `/bin/sh /app/bin/kodi` with
+`/app/lib/kodi/kodi.bin` as its child; `pgrep -x kodi.bin` returned the one
+binary; and after `RestartApp()` that pid was a new one with JSON-RPC answering
+again about 11 seconds later.
+
 **Wait for it properly. JSON-RPC answers early**, before the skin and add-on
 services are up, so a ping that succeeds does not mean the box is ready:
 
@@ -126,7 +132,7 @@ xbmc.log("probe: 30999=%r" % xbmcaddon.Addon("<addon.id>").getLocalizedString(30
 ```sh
 # 30999 appended to the installed strings.po *after* Kodi started
 kodi-builtin 'RunScript(/abs/path/probe.py)'        # probe: 30999=''
-kodi-remote post Settings.SetSettingValue \
+kodi-remote get Settings.SetSettingValue \
   '{"setting":"locale.language","value":"resource.language.en_gb"}'
 kodi-builtin 'RunScript(/abs/path/probe.py)'        # probe: 30999='PROBE-NEW-ID-99'
 ```
@@ -138,6 +144,14 @@ language it was already on it read back its text. An *edited* translation
 behaves the same way — a marker written into a `de_de` `strings.po` at 12:26
 rendered on screen after a switch to German at 12:27, in a process that had
 already loaded `de_de` once at 12:18.
+
+**On 22.0b2 a write of the same value did not do it.** On a Flatpak build, seven
+ids were added to an add-on's `en_gb` `strings.po` while the add-on was disabled,
+and read back `''` once it was enabled again. The `locale.language` write above,
+to the `resource.language.en_gb` it was already on, answered `true`, and the same
+probe still read `''` for all seven. After `RestartApp()` all seven read back
+their text. Only one language was installed on that box, so a switch to a
+different language and back was not tried there.
 
 So the sequence that costs a restart is narrower than it looks: a bounce does
 not republish strings, a language round-trip does.
@@ -195,9 +209,14 @@ library scans, artwork caching, and idle time.
 
 ## Open questions
 
-- The wrapper behaviour was verified on a Debian-packaged Kodi. Flatpak, snap,
-  LibreELEC, and Windows builds have different process trees and have not been
-  checked — do not assume `pgrep -x kodi` finds a wrapper there, or that one exists.
+- The wrapper behaviour was verified on a Debian-packaged Kodi. On a Flatpak
+  only `RestartApp()` was run; whether killing `kodi.bin` alone gets it relaunched
+  there, as it does on Debian, was not tried. Snap, LibreELEC, and Windows builds
+  have different process trees and have not been checked — do not assume
+  `pgrep -x kodi` finds a wrapper there, or that one exists.
+- Whether switching `locale.language` to a different language and back reloads
+  an add-on's strings on Kodi 22 is untested. A write of the value it already
+  held did not, on 22.0b2.
 - Why `System.RestartApp` over JSON-RPC was a no-op on the Debian-packaged Omega
   21.3 box is not established. The `RestartApp()` builtin documented above was
   not tried in the same session, so whether the two paths differ is untested.

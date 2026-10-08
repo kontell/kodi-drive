@@ -139,8 +139,8 @@ think of and checking all of them.
 
 ```sh
 kodi-builtin 'ActivateWindow(Videos,videodb://movies/titles/,return)'
-kodi-remote post Input.Down
-kodi-remote post XBMC.GetInfoBooleans '{"booleans": [
+kodi-remote get Input.Down
+kodi-remote get XBMC.GetInfoBooleans '{"booleans": [
   "String.IsEqual(ListItem.DBTYPE,movie)",
   "[String.IsEqual(ListItem.DBTYPE,movie) + !String.IsEmpty(ListItem.DBID)]",
   "[String.IsEqual(ListItem.DBTYPE,movie) + String.IsEmpty(ListItem.DBID)]",

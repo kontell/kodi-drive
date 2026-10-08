@@ -4,15 +4,15 @@ description: >
   Get addon.xml right, including the parts Kodi ignores without telling you. Use
   when writing or debugging an addon.xml, when a setting or flag appears to have
   no effect, when a context item never shows up, or when a dependency is not
-  installed. Covers the element that only works in one extension point, why
-  extension order is load-bearing, and the visibility syntax that fails the whole
+  installed. Covers the element that only works in one extension point, which
+  extension RunScript runs, and the visibility syntax that fails the whole
   expression.
 license: CC-BY-SA-4.0
 metadata:
   category: python-addon
-  verified-kodi: "21.3 Omega"
+  verified-kodi: "21.3 Omega, 22.0b2 Piers"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-30"
+  verified-date: "2026-10-08"
   verified-method: "sourced"
 ---
 
@@ -56,13 +56,60 @@ Two things to know once it works:
   changes nothing until that thread is discarded. An add-on disable/enable bounce
   does it.
 
-## The first `<extension>` decides your LibPath
+## `RunScript(<id>)` runs the script extension, wherever it sits
 
-An add-on's `LibPath` comes from its **first** `<extension>` element, and that is
-what `RunScript` resolves. So extension order is load-bearing, not cosmetic.
+`RunScript(<addon id>,…)` does not run the add-on's first extension. It asks for
+the add-on as a script, trying four extension points in this order and running
+the `library=` of the first one the add-on declares:
 
-An add-on that is both a script and a service must declare the script extension
-first, or `RunScript` resolves to the wrong entry point.
+`xbmc.python.script` → `xbmc.python.weather` → `xbmc.python.lyrics` →
+`xbmc.python.library`
+
+That is `xbmc/interfaces/builtins/AddonBuiltins.cpp:245-255` at `22.0b2-Piers`,
+which hands the matched type to `CAddon::LibPath()`
+(`xbmc/addons/Addon.cpp:637-648`) to pick that extension's library. `21.3-Omega`
+has the same code at `AddonBuiltins.cpp:244-254` and `Addon.cpp:640-651`.
+Position in the file plays no part.
+
+So an add-on whose first extension is something else entirely can still be run
+by id. Observed on 22.0b2, on a binary PVR add-on declaring `kodi.pvrclient`,
+then `xbmc.service`, then:
+
+```xml
+<extension point="xbmc.python.library" library="resources/scripts/probe.py"/>
+```
+
+```sh
+kodi-builtin 'RunScript(<id>,step2,afterRescan)'
+```
+
+```
+debug <general>: CPythonInvoker(30, <ADDONS>/<id>/resources/scripts/probe.py): start processing
+ info <general>: KOFIN-RUNSCRIPT-PROBE argv=['probe.py', 'step2', 'afterRescan']
+```
+
+The arguments arrive from `sys.argv[1]` on. The add-on's type did not change:
+`Addons.GetAddonDetails` still answered `kodi.pvrclient`, and `Addons.GetAddons`
+listed it under `xbmc.python.library` in addition, under neither
+`xbmc.python.script` nor `xbmc.addon.executable`.
+
+**What the first extension does decide** is the add-on's main type and its
+*master* library (`xbmc/addons/addoninfo/AddonInfoBuilder.cpp:611` at
+`22.0b2-Piers`, `:588` at `21.3-Omega`). `RunScript(<id>)` falls back to the
+master library only when the add-on declares none of the four points, and says
+so:
+
+```
+warning <general>: RunScript called for a non-script addon '<id>'. This behaviour is deprecated.
+```
+
+On a binary add-on the master library is the shared object, so the fallback runs
+nothing. That line was the whole result of `RunScript(<id>,…)` on the PVR add-on
+above before it had the library extension.
+
+**An `addon.xml` edited in place is not read until a rescan.** With the new
+extension already on disk, the same call still took the fallback and logged the
+warning. After `UpdateLocalAddons()` it ran the script.
 
 ## Kodi does not install optional dependencies
 
@@ -142,7 +189,10 @@ opens `DialogVideoInfo` for items carrying only music tags.
 ## What fails silently
 
 - `<reuselanguageinvoker>` in the wrong extension point: no log line either way.
-- Extension order changing what `RunScript` resolves.
+- `RunScript(<id>)` on an add-on with no script-type extension: one deprecation
+  warning, and nothing runs.
+- An extension added to an installed `addon.xml`: the old manifest keeps
+  answering until `UpdateLocalAddons()`.
 - An optional dependency simply not being there.
 - A parenthesised `<visible>` failing the whole expression, so the item vanishes.
 - `<dependencies>` on a `list[string]` setting unregistering the referenced setting.
@@ -152,8 +202,9 @@ opens `DialogVideoInfo` for items carrying only music tags.
 
 - Whether the `<dependencies>` on `list[string]` behaviour is fixed in Kodi 22
   has not been retested — it was bisected on 21.3 only.
-- Whether `LibPath` still derives from the first extension in Kodi 22 has not
-  been re-verified against 22 source.
+- The script-plus-service case — `xbmc.service` first, `xbmc.python.script`
+  second — was read from source and not run. What was run is
+  `xbmc.python.library` in third place on a binary add-on, on 22.0b2 only.
 
 ## See also
 

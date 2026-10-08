@@ -179,6 +179,104 @@ For an add-on that writes `plugin://` rows into the library:
   coming; the earlier Omega observation stands — movies were deleted and the
   add-on did not rebuild them until a repair pass ran.
 
+## A plugin as a TV source: bind the root *and* every show folder
+
+Binding a plugin directory as `tvshows` content and scanning it is not enough
+to import a show. On 22.0b2 Piers the scanner listed every show folder the
+plugin returned and imported none, logging only
+`VideoInfoScanner: No (new) information was found in dir plugin://…/tvshows/`
+(observed; the shows appeared on the next scan once each folder had its own
+binding).
+
+The cause is how Kodi walks up a plugin path. `URIUtils::GetParentPath`
+treats the parent of **any** `plugin://` path that still has a file name as the
+plugin root `plugin://<addon id>/`, not the directory above it
+(`xbmc/utils/URIUtils.cpp` lines 532–549 at `e513e0ff`: the options are
+stripped first, then the whole file name). `CVideoDatabase::GetScraperForPath`
+looks the folder's own `path` row up and, finding no content on it, "drills up
+until a scraper is configured" through exactly that function
+(`xbmc/video/VideoDatabase.cpp` lines 8678 and 8784–8790), so from
+`plugin://<id>/tvshows/<show>/` it reaches the plugin root, which has no
+binding, and the folder is skipped without a line of its own
+(`RetrieveVideoInfo` drops an item whose scraper lookup fails,
+`xbmc/video/VideoInfoScanner.cpp` line 924 onward).
+
+What works, as the phase-0 probe found and the import confirmed:
+
+- Bind the root with `VideoLibrary.SetSourceContent` (`content: "tvshows"`,
+  `scraperid: "metadata.local"`), **and** bind each show folder the same way
+  with `containssingleitem: true`. The folder then owns a `path` row with
+  content, and the scan of the root imports the show and its episodes
+  (observed: the same root scan that had imported nothing added every show
+  and episode once the folders were bound).
+- The add-on's manifest must declare a `<medialibraryscanpath>` **for each
+  content type** it scans. `CPluginDirectory::IsMediaLibraryScanningAllowed`
+  keys the lookup on the scraper's content (`xbmc/filesystem/PluginDirectory.cpp`
+  lines 564–590; the parser is `xbmc/addons/PluginSource.cpp` lines 26–38). With
+  only `content="movies"` declared the scan ends at once with
+  `VideoInfoScanner: Plugin '…' does not support media library scanning for
+  'TV shows' content` (observed).
+- Episodes are matched to their show by directory: the scanner lists the show
+  folder recursively and files each item whose tag carries season and episode
+  numbers (`ProcessItemByVideoInfoTag`, `VideoInfoScanner.cpp` lines 1998–2014).
+  A tag is accepted when `season >= 0 and episode > 0`, or — for a plugin
+  item only — `season > 0 and episode >= 0`. **Season 0 with no episode number
+  never imports** (observed: every unnumbered special stayed out of the
+  library while its numbered neighbours came in). Nothing logs the refusal
+  beyond `Could not enumerate file`.
+- A show folder may carry a `hash` property. `EnumerateSeriesFolder` compares it
+  with the hash stored for the folder and skips the listing when they match
+  (`VideoInfoScanner.cpp` lines 1836–1846; the stored hash is written after the
+  episodes were added). The root listing's own hash is built from each folder's
+  path, size and **date at day precision** (`GetPathHash`, lines 2945–2965), so
+  a show whose contents changed has to present a different `setDateTime` day or
+  a scan of the root skips every folder at once (`Skipping dir … due to no
+  change`, observed for each unchanged show).
+- `SetSourceContent` with `content: "none"` deletes the rows under the path
+  only with `clearmode: "remove"`; that branch alone calls
+  `RemoveContentForPath` (`xbmc/interfaces/json-rpc/VideoLibrary.cpp` lines
+  1044–1046), and `GetSubPaths` makes it cover every `path` row with the given
+  prefix (`VideoDatabase.cpp` line 6036 onward), shows included. `"clear"`
+  unbinds the scraper and leaves the rows (observed on 22.0b2: a `"clear"` left
+  every movie in place; a `"remove"` on a library root took its movies and its
+  shows in one call).
+
+## What the public API cannot set or list
+
+Three fields read back as if the setter had failed. None of them is a bug in
+the caller.
+
+**A show's `dateadded` is derived.** The `tvshowcounts` view defines it as
+`MAX(files.dateAdded)` over the show's episodes, and `tvshow_view` reads it from
+there (`xbmc/video/VideoDatabaseDDL.cpp` lines 430–446 and 469).
+`VideoLibrary.SetTVShowDetails` accepts `dateadded`
+(`xbmc/interfaces/json-rpc/VideoLibrary.cpp` lines 1484–1487) and
+`UpdateDetailsForTvShow` writes the `tvshow` table, which has no such column
+(`VideoDatabase.cpp` line 2714 onward). Observed on 22.0b2: `SetTVShowDetails`
+with `dateadded: "2001-01-01 00:00:00"` answered `OK`; `GetTVShowDetails`
+still returned the newest episode's `dateadded`, to the second.
+
+**A season with no episode row is invisible.** `season_view` joins `episode`
+and `files` without `LEFT` (`VideoDatabaseDDL.cpp` lines 493–520), so
+`VideoLibrary.GetSeasons` never returns a season that `addSeason` created
+but no imported episode belongs to. Observed: the seasons a plugin had named
+through `InfoTagVideo.addSeason` for which no episode imported were absent
+from `GetSeasons`, while their siblings with episodes were listed with the
+names given.
+
+**`lastplayed` and `dateadded` are local time, and the API stores what it is
+given.** `CVideoDatabase::SetPlayCount` fills a missing date with
+`CDateTime::GetCurrentDateTime()` and writes `GetAsDBDateTime()`, local wall
+clock (`VideoDatabase.cpp`, the `SetPlayCount(const CFileItem&, int, const
+CDateTime&)` overload); `GetDateAdded` falls back to the file's modification
+time or the current local time. A `Set*Details` call stores the text it is
+sent verbatim. Observed on 22.0b2, on a machine one hour ahead of UTC: a
+playback stopped at 18:34:03 UTC left `lastplayed: "2026-10-08 19:34:03"`;
+a `SetEpisodeDetails` sent `"2026-10-08 18:36:22"` (the server's UTC) read back
+unchanged and showed an hour early. Convert server timestamps to local time
+before writing them; leave calendar dates (`premiered`, `firstaired`) alone,
+since shifting a date by the zone moves it a day.
+
 ## Changing add-on enablement without loading the profile
 
 A profile Kodi does not currently have open can be edited directly:
@@ -196,6 +294,13 @@ Only touch a profile that is not currently open.
 
 ## What fails silently
 
+- A show folder under a bound `tvshows/` plugin root that has no binding of its
+  own is skipped with nothing but `No (new) information was found` for the
+  root.
+- A manifest missing a `<medialibraryscanpath>` for the content being scanned
+  ends the scan in under 100 ms with one info line.
+- A `Set*Details` call that answers `OK` for a derived field changed nothing;
+  only a readback shows it.
 - A `.db` copied without its `-wal` reads as a complete but older database.
 - A hardcoded schema-numbered filename simply does not exist on another Kodi
   version; a script that does not check reports an empty library.
@@ -214,6 +319,11 @@ Only touch a profile that is not currently open.
   recorded.
 - Whether Kodi holds any add-on enablement state in memory for non-active
   profiles, which would delay or defeat a direct `Addons33.db` edit, is untested.
+- Whether a show folder's own binding is needed on Omega as well was not
+  tested; `GetParentPath`'s plugin branch is the same there (sourced), the
+  import was observed on Piers only.
+- `GetSeasons` was only checked through JSON-RPC; whether the GUI's season
+  listing uses the same join and hides the same rows was not looked at.
 
 ## See also
 

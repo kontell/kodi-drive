@@ -10,9 +10,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: python-addon
-  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers, 22.0b2 Piers"
   verified-platform: "Linux x86_64, Android TV"
-  verified-date: "2026-09-01"
+  verified-date: "2026-10-08"
   verified-method: "observed"
 ---
 
@@ -136,6 +136,36 @@ announcement is never sent at all. See
 [`kodi-addon-driving`](../kodi-addon-driving/SKILL.md) and
 [`kodi-jsonrpc`](../kodi-jsonrpc/SKILL.md#an-omitted-id-stops-a-read-method-running-at-all).
 
+## Announcements are not in the log unless you ask for them
+
+Debug logging does not show announcements. `CAnnouncementManager::Announce`
+logs `CAnnouncementManager - Announcement: <method> from <sender>` through
+`LogFC` with the `LOGANNOUNCE` component (`xbmc/interfaces/AnnouncementManager.cpp`
+line 341 at `e513e0ff`), and component lines are written only when that
+component is enabled in Settings → System → Logging → *Enable component-specific
+logging*. `LOGANNOUNCE` is `1 << (LOGMASKBIT + 17)` with `LOGMASKBIT = 5`
+(`xbmc/commons/ilog.h` lines 26 and 45), so its bit is `4194304` in the
+`debug.setextraloglevel` list. Observed on 22.0b2 with debug logging on and two
+other components selected: a `kodi.log` with sixteen thousand
+`VideoInfoScanner: Adding new item` lines held zero `Announcement:` lines, so
+a count of `OnUpdate` in the log said nothing about how many library writes
+had happened.
+
+Count what your own code sent, or read the library back; the log cannot tell
+you.
+
+## Removing a path announces every row, and visible widgets re-fetch behind each
+
+`VideoLibrary.SetSourceContent` with `clearmode: "remove"` calls
+`RemoveContentForPath`, which deletes the rows under the path one by one and
+each `DeleteMovie` announces `OnRemove` for its row
+(`xbmc/video/VideoDatabase.cpp` lines 6036 onward and 4077 at `e513e0ff`). A
+home-screen widget bound to a `videodb://` path re-fetches on each
+announcement: during one such clear with the home screen showing,
+`CDirectoryProvider[videodb://movies/sets/]: refreshing...` was logged once a
+second for the whole operation (observed). The clear itself was one JSON-RPC
+call; the cost moved into the widgets.
+
 ## What fails silently
 
 - Querying inside a handler returns post-change state that looks plausible.
@@ -144,6 +174,7 @@ announcement is never sent at all. See
 - `OnStop` on every track change looks like a stop.
 - An `OnAdd` payload for a non-library item has no path, and no error says so.
 - A slow handler degrades every other add-on, with nothing pointing at you.
+- Debug logging shows no announcements at all; the absence proves nothing.
 
 ## Open questions
 
@@ -151,6 +182,10 @@ announcement is never sent at all. See
   playlists has not been checked — only the music path was traced.
 - The 250 ms debounce is a working figure from a ten-track album on one machine,
   not a measured threshold. A slower device may need more.
+- The same clear of the same rows took 45 s earlier in the day and 3 min 45 s
+  with the home screen showing and 54 sets among the rows. Whether the
+  per-row widget refreshes or the sets account for the difference was not
+  separated.
 
 ## See also
 

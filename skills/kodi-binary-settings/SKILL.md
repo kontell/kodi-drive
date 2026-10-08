@@ -138,6 +138,11 @@ lists it under `xbmc.python.library` as well, and under neither
 extension in place brought the PVR client and the service back as before, with
 the id form still working.
 
+The settings dialog gives the same result as the builtin. With focus on the
+button, Select closed the dialog, ran the script with `testConnection` in
+`sys.argv[1]`, and produced the same success line. So did a full restart of Kodi
+with the extension in the manifest.
+
 How `RunScript` picks the library, and why its position in `addon.xml` does not
 matter, is in [`kodi-addon-manifest`](../kodi-addon-manifest/SKILL.md).
 
@@ -227,8 +232,7 @@ Labels are string ids from `resources/language/resource.language.en_gb/strings.p
   not built, so it is untested.
 - Whether Kodi 22 added an action callback to the binary settings ABI has not
   been checked.
-- The id form was fired through the EventServer rather than by pressing the
-  settings button, on 22.0b2 on Linux only. Omega carries the same resolution
+- The id form was run on 22.0b2 on Linux only. Omega carries the same resolution
   code — see `kodi-addon-manifest` — and was not run.
 - A path-form button on a binary add-on installed under `special://xbmc/addons`
   was not tried. The root listing above says the path finds nothing there; no

@@ -10,9 +10,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: kodi-data
-  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers, 22.0b2 Piers"
   verified-platform: "Linux x86_64, armv7l"
-  verified-date: "2026-08-16"
+  verified-date: "2026-10-08"
   verified-method: "observed"
 ---
 
@@ -131,19 +131,53 @@ time — Kodi 22 started backtick-quoting `sets` because it is a reserved word i
 MySQL 9.6 — and every database created after that commit carries the new
 spelling. SQLite treats the two alike, so it is noise in a diff, not a finding.
 
-## "Clean Library" deletes plugin-sourced movies
+## "Clean Library" asks the add-on before deleting a plugin row
 
-Kodi's own **Videos > Files > Clean Library** removes movie rows whose source is
-a `plugin://` path. Observed: movies were deleted while **episodes and TV shows
-survived**, and the add-on that populated them did not rebuild them — 45 minutes
-of watching, no recovery. A repair pass was required.
+Kodi's own **Videos > Files > Clean Library** does not treat a `plugin://` path
+as a file it cannot stat. On Omega and Piers, every `files` row whose path is a
+plugin URL is put to the add-on: Kodi runs the plugin at that URL with
+`kodi_action=check_exists` appended and keeps the row only when the script
+answers `xbmcplugin.setResolvedUrl(handle, True, item)`. Any other outcome —
+`False`, no answer, a script error — deletes the row. The second pass applies
+the same test to each `path` row (sourced: `xbmc/video/VideoDatabase.cpp`
+lines 10169–10175 and 10336–10342, `xbmc/filesystem/PluginDirectory.cpp` lines
+564–606, at 22.0b2 `e513e0ff`; `21.3-Omega` carries the same branch, `20.5-Nexus`
+has none and deletes every plugin row unconditionally).
 
-This is expected behaviour rather than a bug: Clean Library exists to remove
-entries whose files are gone, and a plugin path is not a file it can stat. But it
-is user-initiated destruction that an add-on cannot prevent or detect in advance.
+**Kodi never asks when it cannot ask, and then it deletes.**
+`CPluginDirectory::IsMediaLibraryScanningAllowed` refuses before the script
+runs when:
 
-If you maintain an add-on that writes to the library, assume a user will run this
-eventually and make sure you have a repair path.
+- the add-on is **disabled** — the lookup is
+  `GetAddon(..., OnlyEnabled::CHOICE_YES)` and the refusal logs
+  `error <general>: Unable to find plugin <addon id>`;
+- the add-on declares no `<medialibraryscanpath content="movies">` (or
+  `tvshows`, `musicvideos`) under its `xbmc.python.pluginsource` extension, or
+  the declared path is not a parent of the row's path
+  (`xbmc/addons/PluginSource.cpp:28-33` is the parser);
+- the path row carries no scraper content, so there is no content type to look
+  up.
+
+Observed on 22.0b2 Piers, same library, two runs half a minute apart. With the
+add-on enabled, Clean Library invoked `check_exists` once per movie row — one
+`CScriptRunner: running add-on script` line each, a millisecond apart — finished
+in 3.8 s and deleted nothing. With the add-on disabled it logged
+`Unable to find plugin` instead, took 37 s, and emptied the movie table; the
+next scan reported the plugin directory `as not in the database`. Kodi's logger
+collapses repeats (`Skipped 24 duplicate messages..`), so the number of error
+lines is not the number of rows lost.
+
+For an add-on that writes `plugin://` rows into the library:
+
+- **Declare the scan path and answer `check_exists` for every row you own.**
+  Answer `True` unless you hold a positive record that the item is gone;
+  "unknown" must not read as "deleted", because Kodi acts on it immediately.
+- **A disabled add-on cannot defend its rows.** A user who disables it and runs
+  Clean Library loses every row, with no prompt specific to add-on content.
+  Keep a repair path.
+- Clean Library is still user-initiated destruction the add-on cannot see
+  coming; the earlier Omega observation stands — movies were deleted and the
+  add-on did not rebuild them until a repair pass ran.
 
 ## Changing add-on enablement without loading the profile
 
@@ -166,13 +200,18 @@ Only touch a profile that is not currently open.
 - A hardcoded schema-numbered filename simply does not exist on another Kodi
   version; a script that does not check reports an empty library.
 - Clean Library removes rows with no warning specific to add-on content, and the
-  loss is only visible later, as absence.
+  loss is only visible later, as absence. With the add-on disabled the only
+  trace is `Unable to find plugin` at error level, repeat-collapsed.
 
 ## Open questions
 
 - Whether Clean Library's behaviour differs for music added from a `plugin://`
-  source has not been tested — only video was observed, where movies were removed
-  and episodes were not. That asymmetry is itself unexplained.
+  source has not been tested — only video was observed. The Omega run removed
+  movies and kept episodes; the files loop treats every media type alike and
+  keys the `<medialibraryscanpath>` lookup on the row's scraper content
+  (sourced, above), so the asymmetry has to come from what that add-on declared
+  or answered per content type (inferred). Its declarations at the time were not
+  recorded.
 - Whether Kodi holds any add-on enablement state in memory for non-active
   profiles, which would delay or defeat a direct `Addons33.db` edit, is untested.
 

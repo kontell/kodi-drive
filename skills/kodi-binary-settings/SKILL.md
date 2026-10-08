@@ -9,10 +9,10 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: binary-addon
-  verified-kodi: "21.3 Omega"
+  verified-kodi: "21.3 Omega, 22.0b2 Piers"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
-  verified-method: "observed"
+  verified-date: "2026-10-08"
+  verified-method: "sourced"
 ---
 
 # Settings in a binary add-on
@@ -56,7 +56,14 @@ Menu hooks have their own limits, which are different ones — see
 
 ## The round-trip that does work
 
-Use an action control that closes settings first, then re-enters through the
+Declare a script in `addon.xml`, after the binary extension, so that Kodi can run
+it by add-on id:
+
+```xml
+<extension point="xbmc.python.library" library="resources/scripts/trigger.py"/>
+```
+
+Then use an action control that closes settings first, and re-enters through the
 value-change callback:
 
 ```xml
@@ -65,7 +72,7 @@ value-change callback:
     <label>30xxx</label>
     <close>true</close>
   </control>
-  <data>RunScript(special://home/addons/&lt;id&gt;/resources/scripts/trigger.py,login)</data>
+  <data>RunScript(&lt;id&gt;,login)</data>
 </setting>
 ```
 
@@ -95,11 +102,64 @@ callback — and a doubled action button runs your action twice.
 This is a deliberate workaround for a real API gap, not a hack to be modernised
 away. It is worth a comment in the code saying so, because it looks removable.
 
+### Address the script by add-on id, not by path
+
+`RunScript(special://home/addons/<id>/resources/scripts/trigger.py,login)` runs
+the same script, and names a place the add-on is not always in.
+`special://home/addons` is one of the roots Kodi loads add-ons from, and
+`special://xbmc/addons` is another. From a probe script on a 22.0b2 Flatpak,
+asking about the skin that ships with Kodi and about a PVR add-on the user
+installed:
+
+```
+special://home/addons/skin.estuary/addon.xml exists=False
+special://xbmc/addons/skin.estuary/addon.xml exists=True
+special://home/addons/<id>/addon.xml exists=True
+special://xbmc/addons/<id>/addon.xml exists=False
+```
+
+Each was in one root and missing from the other, so a path written against
+`special://home/addons` reaches only an add-on that landed there.
+
+`RunScript(<id>,login)` names no directory. Observed on 22.0b2, on a PVR add-on
+with a companion service, fired as `RunScript(<id>,testConnection)`:
+
+```
+debug <general>: CPythonInvoker(31, <ADDONS>/<id>/resources/scripts/trigger.py): start processing
+debug <general>: CPythonInvoker(31):  trigger.py
+debug <general>: CPythonInvoker(31):  testConnection
+ info <<id>>: <id> - TestConnectionInternal - Test connection successful
+```
+
+The last line is the C++ `SetSetting` callback acting on the sentinel. Two things
+held alongside it. The add-on stayed a `kodi.pvrclient` — the extra extension
+lists it under `xbmc.python.library` as well, and under neither
+`xbmc.python.script` nor `xbmc.addon.executable`. And a disable/enable with the
+extension in place brought the PVR client and the service back as before, with
+the id form still working.
+
+The settings dialog gives the same result as the builtin. With focus on the
+button, Select closed the dialog, ran the script with `testConnection` in
+`sys.argv[1]`, and produced the same success line. So did a full restart of Kodi
+with the extension in the manifest.
+
+How `RunScript` picks the library, and why its position in `addon.xml` does not
+matter, is in [`kodi-addon-manifest`](../kodi-addon-manifest/SKILL.md).
+
+**One add-on, one entry script.** `RunScript(<id>,…)` takes no file name, so every
+button arrives at the same `library=` with its action in `sys.argv[1]`. Check
+that argument against the list of settings the script exists to poke: `RunScript`
+is callable by any add-on or skin, and an unchecked
+`setSetting(sys.argv[1], 'trigger')` writes whichever setting the caller names.
+
 ### What does not work, so you can stop trying
 
 - **`RunPlugin` and `RunAddon` do nothing** — a PVR add-on is not a plugin.
 - **`action=""`** does nothing.
 - **`action="SetSetting(...)"`** is not a valid Kodi builtin.
+- **`RunScript(<id>,…)` without the `xbmc.python.library` extension** runs
+  nothing. Kodi logs `RunScript called for a non-script addon '<id>'. This
+  behaviour is deprecated.` and stops there.
 
 `RunScript` is the one that works, because a script *is* something Kodi can run.
 
@@ -130,6 +190,27 @@ kodi::addon::SetSettingString("id", value);
 your add-on is genuinely single-instance, global settings are simpler and the two
 should not be mixed.
 
+### A `list[string]` setting logs an error every time settings are handed over
+
+Observed on 22.0b2, on a PVR add-on with three `list[string]` settings: one line
+per list setting, at `error` level, when the add-on loads and again whenever a
+setting is written —
+
+```
+error <general>: Unknown setting type of '<setting id>' for <Add-on name>
+```
+
+Sourced: `CAddonDll::TransferSettings` switches on the setting's type with cases
+for boolean, integer, number and string, and no case for a list
+(`xbmc/addons/binary-addons/AddonDll.cpp:395-469` at `22.0b2-Piers`). A list
+lands in `default:` (`:471-488`), which logs that line and then passes
+`setting->ToString()` to the add-on's string callback anyway. `21.3-Omega` has
+the same switch at `:398` and the same `default:` at `:473`.
+
+So the setting keeps working and the log gains an error that reads like a fault
+in the add-on. The lines come from Kodi's side of the transfer, before the
+add-on's callback runs.
+
 Labels are string ids from `resources/language/resource.language.en_gb/strings.po`.
 
 ## What fails silently
@@ -139,6 +220,10 @@ Labels are string ids from `resources/language/resource.language.en_gb/strings.p
 - A boolean trigger without a sentinel re-fires on every settings save.
 - A C++ stop-handler under the stream-properties path is never called, so
   server-side sessions leak.
+- `RunScript(<id>,…)` on a binary add-on that declares no script extension: one
+  warning in the log, no script run, and a button that does nothing.
+- A `list[string]` setting works, and puts an `error` line in the log on every
+  settings transfer.
 
 ## Open questions
 
@@ -147,6 +232,17 @@ Labels are string ids from `resources/language/resource.language.en_gb/strings.p
   not built, so it is untested.
 - Whether Kodi 22 added an action callback to the binary settings ABI has not
   been checked.
+- The id form was run on 22.0b2 on Linux only. Omega carries the same resolution
+  code — see `kodi-addon-manifest` — and was not run.
+- A path-form button on a binary add-on installed under `special://xbmc/addons`
+  was not tried. The root listing above says the path finds nothing there; no
+  binary add-on was available in that location to press the button on.
+- Whether `xbmc.python.script` in place of `xbmc.python.library` would also put a
+  binary add-on in the Program add-ons list was not tried.
+- The transfer switch has no case for an action setting either. Whether a
+  `type="action"` setting therefore logs the same `Unknown setting type` line was
+  not run: the add-on the list lines were seen on declares its buttons as
+  `type="string"` with a button control.
 
 ## See also
 

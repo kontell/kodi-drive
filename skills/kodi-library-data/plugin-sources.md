@@ -171,6 +171,28 @@ scan, wait for `OnScanFinished` (or for `Library.IsScanningVideo` /
 `Library.IsScanningMusic` to drop), then issue the next. A user's own
 "Update library" during an add-on's scan does the same to it.
 
+## A played song with no date is "played now"; an album is "added" when last scanned
+
+`CMusicDatabase::UpdateSong` (xbmc/music/MusicDatabase.cpp) writes
+`lastplayed = GetCurrentDateTime()` when the play count is above zero and
+the date passed is invalid, and `AudioLibrary.SetSongDetails` passes the
+song's existing date when the call carries none. A client that sets
+`playcount` for an item its server marks played without a date therefore
+stamps the moment of the call: sixteen such songs topped a tablet's
+recently played albums on the day of its import (22.0b2). Send a date.
+
+`GetRecentlyAddedAlbums` orders by `album.dateAdded`, which the scanner sets
+to the newest `song.dateAdded` of the album (`UPDATE album SET dateAdded`
+after the songs), and `song.dateAdded` is the media file's timestamp
+(`GetMediaDateFromFile`), which a plugin path cannot give, so it is the
+scan time. Neither `SetSongDetails` nor `SetAlbumDetails` takes a date
+added, and the music `ListItem.setInfo` has no `dateadded` key (the video
+one does). A plugin source therefore controls the order only through the
+order its directories are scanned in (label order, `DoScan` sorts by
+label), and every re-listing of a directory moves its album to the top of
+recently added; a user-accepted "rescan tags from files" re-stamps the
+whole library.
+
 ## A stopped music scan leaves a directory hash without its songs
 
 `CMusicInfoScanner::DoScan` stores a directory's hash

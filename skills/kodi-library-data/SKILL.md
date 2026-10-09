@@ -268,8 +268,9 @@ walks the whole tree through `CountFilesRecursively` to size the bar while
 the scan itself walks it again. For a plugin source that is two listings
 of every directory, concurrently: observed on 22.0b2, two `CScriptRunner`
 threads listing the same music root at the same moment, each taking 62 s on
-a 32-bit ARM box where one took 14 s alone, and album directories listed
-twice over for the rest of the scan. Pass `showdialogs: false` to a music
+a 32-bit ARM box where the same listing took 20 s alone, and album
+directories listed twice over for the rest of the scan (one album listing
+45–67 s doubled, 0.25 s alone with the interpreter reused). Pass `showdialogs: false` to a music
 scan of a plugin source and draw any progress yourself. The video scanner
 has no counting thread; its dialog costs no extra listing.
 

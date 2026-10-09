@@ -241,6 +241,22 @@ What works, as the phase-0 probe found and the import confirmed:
   every movie in place; a `"remove"` on a library root took its movies and its
   shows in one call).
 
+## A scan requested while one is running stops it
+
+`VideoLibrary.Scan` and `AudioLibrary.Scan` both execute the `UpdateLibrary`
+builtin, and that builtin toggles: when the library queue reports a scan in
+progress it calls `StopLibraryScanning()` and does **not** queue the new
+request (`xbmc/interfaces/builtins/LibraryBuiltins.cpp`, `UpdateLibrary`,
+both the `music` and the `video` branch). Observed on 22.0b2: two
+`VideoLibrary.Scan` calls for two different directories issued within a
+second logged one `VideoInfoScanner: Starting scan` and one `Finished scan`,
+the second directory was never listed; a `VideoLibrary.Scan` sent while a
+movies import was running ended that import with `No (new) information was
+found` after a part of the directory, and the rest stayed out. Issue one
+scan, wait for `OnScanFinished` (or for `Library.IsScanningVideo` /
+`Library.IsScanningMusic` to drop), then issue the next. A user's own
+"Update library" during an add-on's scan does the same to it.
+
 ## A plugin as a music source: one directory at a time
 
 Importing songs from a `plugin://` listing works through `AudioLibrary.Scan`
@@ -382,6 +398,15 @@ Only touch a profile that is not currently open.
   trace is `Unable to find plugin` at error level, repeat-collapsed.
 
 ## Open questions
+
+- A 32-bit ARM Kodi 22.0b2 (LibreELEC nightly, Python 3.14) segfaulted in
+  `XBMCAddon::xbmc::InfoTagVideo::setGenres` while a plugin listing of a show
+  folder ran inside a video scan that had imported some three thousand
+  episodes over twenty-six minutes (`kodi_crashlog`, `Program terminated with
+  signal SIGSEGV`, frame 0 in `setGenres`); the same listing code imported the
+  same library on an x86_64 22.0b2 Flatpak without incident. Memory headroom
+  on the device was low. Whether this is the binding, the Python build or
+  memory is not known.
 
 - The Omega Clean Library run removed movies and kept episodes; the files loop
   treats every video type alike and keys the `<medialibraryscanpath>` lookup on

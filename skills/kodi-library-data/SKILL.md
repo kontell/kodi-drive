@@ -258,6 +258,21 @@ start of a plugin listing during a video scan (`kodi_crashlog`, frame 0
 x86_64 22.0b2 Flatpak for weeks without a symptom. Keep the ListItem in a
 name that outlives every use of its tag.
 
+## A music scan with a dialog lists every directory twice
+
+`AudioLibrary.Scan` with `showdialogs: true` (the `UpdateLibrary` builtin's
+`userInitiated`) gives the music scanner a progress handle, and with a
+handle `CMusicInfoScanner::Process` starts its `MusicFileCounter` thread
+(`xbmc/music/infoscanner/MusicInfoScanner.cpp`, `m_fileCountReader`), which
+walks the whole tree through `CountFilesRecursively` to size the bar while
+the scan itself walks it again. For a plugin source that is two listings
+of every directory, concurrently: observed on 22.0b2, two `CScriptRunner`
+threads listing the same music root at the same moment, each taking 62 s on
+a 32-bit ARM box where one took 14 s alone, and album directories listed
+twice over for the rest of the scan. Pass `showdialogs: false` to a music
+scan of a plugin source and draw any progress yourself. The video scanner
+has no counting thread; its dialog costs no extra listing.
+
 ## A scan requested while one is running stops it
 
 `VideoLibrary.Scan` and `AudioLibrary.Scan` both execute the `UpdateLibrary`

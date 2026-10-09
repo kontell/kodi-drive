@@ -312,6 +312,22 @@ scan, wait for `OnScanFinished` (or for `Library.IsScanningVideo` /
 `Library.IsScanningMusic` to drop), then issue the next. A user's own
 "Update library" during an add-on's scan does the same to it.
 
+## A stopped music scan leaves a directory hash without its songs
+
+`CMusicInfoScanner::DoScan` stores a directory's hash
+(`m_musicDatabase.SetPathHash(strDirectory, hash)`) after
+`RetrieveMusicInfo` returns, whatever it returned
+(`xbmc/music/infoscanner/MusicInfoScanner.cpp`, `DoScan`), and the
+add loop inside `RetrieveMusicInfo` returns early on `m_bStop`. A scan
+stopped while a directory is being written — a second `AudioLibrary.Scan`
+request stops the running one — can therefore leave the directory's hash
+stored with none or some of its songs, and every later scan of it logs
+`Skipping dir '…' due to no change` and imports nothing. Observed on
+22.0b2: two plugin album directories, 23 songs, skipped on every scan after
+a scan was stopped by hand. Nothing Kodi offers rescans such a directory
+short of changing what it lists (a date on each item moves the hash) or a
+scan with `SCAN_RESCAN`, which a plugin cannot request through JSON-RPC.
+
 ## A plugin as a music source: one directory at a time
 
 Importing songs from a `plugin://` listing works through `AudioLibrary.Scan`

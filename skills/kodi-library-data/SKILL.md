@@ -274,24 +274,27 @@ directories listed twice over for the rest of the scan (one album listing
 scan of a plugin source and draw any progress yourself. The video scanner
 has no counting thread; its dialog costs no extra listing.
 
-## A recursive plugin movies root lists every sub-folder on every scan
+## A plugin folder listed in a movies directory becomes a phantom disc
 
-For movies content `CVideoInfoScanner::DoScan` recurses into each folder of
-a directory when the path's `scanRecursive` is set, and skips a sub-folder
-only when it is marked unchanged — a mark that needs the folder's stat
-mtime from the listing (`DIR_PROPERTY_STAT_MTIME`) to match the stored
-fast hash (`xbmc/video/VideoInfoScanner.cpp`, the loop over `items` before
-`items.Stack()` and the recursion loop after `OnDirectoryScanned`). A
-plugin folder item carries no stat mtime and `GetFastHash` on a plugin path
-is empty, so no plugin sub-folder is ever marked: a recursive plugin root
-lists every one of its folders on every scan, each skipped afterwards by
-its own listing hash. The `hash` property that lets a *tvshows* folder be
-skipped without a listing (`RetrieveInfoForTvShow`) is not read on the
-movies path. Bind a plugin movies root non-recursive, scan a changed folder
-by name, and switch recursion on only around a deliberate walk of the whole
-root. Each movie folder under a plugin root needs its own content binding,
-as a show folder does, because `GetScraperForPath` takes a plugin path's
-parent to be the plugin root.
+Before the video scanner looks at a movies listing it calls
+`CFileItemList::Stack()`, whose `ConvertDiscFoldersToFiles` asks
+`VIDEO::UTILS::GetOpticalMediaPath` of every folder item, and that checks
+`CFileUtils::Exists(<folder>/VIDEO_TS.IFO)` (`xbmc/FileItemList.cpp`,
+`xbmc/video/VideoUtils.cpp`). `CPluginFile::Exists` returns true for any
+URL (`xbmc/filesystem/PluginFile.cpp`), so every plugin folder in a movies
+listing is rewritten into `<folder>/VIDEO_TS.IFO`, scraped as a disc
+("No NFO file found. Using title search for '…/VIDEO_TS.IFO'"), imported by
+no local scraper, and never recursed into; the bound sub-paths are then
+dropped as "Skipped N missing sub directories". Observed on 22.0b2 with
+1,788 folders in 1.4 s. A plugin cannot give a movies root sub-folders.
+It can still file each movie under a URL of its own
+(`…/movies/<id>/?mode=play&id=<id>`): Kodi creates the path row from the
+file's directory, and a later `VideoLibrary.Scan(directory=<that folder>)`
+lists and imports that one movie, provided the folder carries its own
+content binding (`GetScraperForPath` takes a plugin path's parent to be the
+plugin root). Bind such a folder without `containssingleitem`, which would
+make the folder the movie. The tvshows path is different: a show folder is
+listed as a folder on purpose and skipped through its `hash` property.
 
 ## A scan requested while one is running stops it
 

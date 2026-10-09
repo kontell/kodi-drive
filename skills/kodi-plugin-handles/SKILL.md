@@ -10,7 +10,7 @@ license: CC-BY-SA-4.0
 metadata:
   category: python-addon
   verified-kodi: "21.3 Omega, 22.0b2 Piers"
-  verified-platform: "Linux x86_64"
+  verified-platform: "Linux x86_64, Linux armv7 (LibreELEC)"
   verified-date: "2026-10-09"
   verified-method: "sourced"
 ---
@@ -78,6 +78,19 @@ imported between listings, ran every listing on the reused interpreter in about
 pass, logged `Python Interpreter Initialized` for every directory and spent
 87–93 ms on each. A plugin cannot change this from its side: the race is between
 Kodi's own threads after the script has finished its work.
+
+## A reused interpreter keeps its modules
+
+Under `<reuselanguageinvoker>` the interpreter that served one listing
+serves the next with everything still imported: between consecutive
+listings of a sequential scan the add-on's own modules cost 0.00 s to
+import, where a cold interpreter cost 0.3–0.9 s on armv7 with its bytecode
+cached and 12 s after `__pycache__` was cleared (22.0b2). Two consequences.
+A file changed on disk is not what runs until the interpreter is recycled —
+instrumentation deployed mid-scan never logged a line until Kodi was
+restarted. And two listings running at once (a music scan with its file
+counter thread, a widget beside a scan) each get a cold interpreter, so the
+warm figure is only ever reached by one lister at a time.
 
 ## Which callers actually wait
 

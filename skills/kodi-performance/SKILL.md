@@ -9,9 +9,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: diagnosis
-  verified-kodi: "22.0-BETA1 Piers, 21.3 Omega"
-  verified-platform: "Android TV, Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-kodi: "22.0b2 Piers, 22.0-BETA1 Piers, 21.3 Omega"
+  verified-platform: "Android TV, Linux x86_64, Linux armv7 (LibreELEC)"
+  verified-date: "2026-10-09"
   verified-method: "observed"
 ---
 
@@ -92,6 +92,30 @@ import is paid once. **In the short-lived plugin process, use the stdlib.**
 
 **`xbmcaddon.Addon()` costs ~2.9 ms.** Constructing one per list item accounted
 for ~5 s of a 15 s listing. Build one and pass it, or read what you need once.
+
+**On armv7 the same `xbmcaddon.Addon()` is about 20 ms.** Two settings reads
+per item, each constructing one, turned a 14 s plugin listing of 1,788 movies
+into 80 s on a 1 GB LibreELEC box (22.0b2); the figure is inferred from that
+difference, not timed in isolation. Memoise a setting for the length of a
+listing.
+
+**A plugin's Python heap is Kodi's heap, and the kernel pays for it.** Every
+interpreter an add-on runs lives inside `kodi.bin`: with its music scan
+stopped and the add-on disabled, a 1 GB box's Kodi fell from 595 MB to
+235 MB resident. Anything over 512 bytes CPython allocates is malloc'd and
+glibc keeps the block after it is freed, so a heap that grew for an
+enumeration stays grown; `ctypes.CDLL("libc.so.6").malloc_trim(0)` after
+the big phase hands it back on glibc builds (applied, not isolated). Measured
+on x86_64: 6,616 Jellyfin item payloads are 58 MB of JSON and 200 MB of
+Python objects; a listing that loaded 1,788 of them grew Kodi by 100 MB in a
+minute. Once the page cache is squeezed, every cold interpreter and every
+fresh SQLite connection reads evicted pages off the card: on that box a
+fresh connection's first statement took 13–24 s (5.6 s even with
+`immutable=1`), the device read 15 MB/s continuously, one album listing of
+a dozen songs took 45–67 s with the CPU idle, and ssh accepted the TCP
+connection but never reached the banner until the box was power-cycled.
+Stream payloads, keep one connection per interpreter, and watch
+`MemAvailable` — it counts the cache being thrashed.
 
 **Full-scan-and-hash in Python does not scale.** Where a gate needs a fingerprint
 of a library, compute it in SQL as an aggregate, or maintain a checksum on write.

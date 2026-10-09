@@ -11,9 +11,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: kodi-data
-  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-kodi: "22.0b2 Piers, 21.3 Omega, 22.0b1 Piers"
   verified-platform: "Linux x86_64, Android TV, armv7l"
-  verified-date: "2026-08-27"
+  verified-date: "2026-10-09"
   verified-method: "observed"
 ---
 
@@ -129,6 +129,21 @@ add-on's own mapping pointed at a different row again.
 
 The lesson generalises: **Kodi's schema has reserved and sentinel rows.** Never
 let the database assign an id you then need to match.
+
+## `versiontagscan` holds exactly one row
+
+`CMusicDatabase::CreateTables` inserts one `versiontagscan` row stamped with
+the schema version, and `GetMusicNeedsTagScan` (`xbmc/music/MusicDatabase.cpp`)
+returns -1 for any row count but one. `CGUIWindowMusicBase` then asks "Music
+library needs to rescan tags from files. Would you like to scan now?" every
+time the music window opens, and accepting runs `ScanLibrary("", SCAN_RESCAN,
+true)`: `DoScan` skips the hash check, logs every directory as "not in the
+database" and re-reads it, deleting and re-creating its path row and songs.
+The stamp Kodi writes after that rescan is an UPDATE, so an empty table never
+heals. Observed on 22.0b2 (Android, armv7): an add-on's database reset that
+deleted the row left a plugin music source re-reading 1,557 album folders at
+about 9 s each. A wipe that empties MyMusic has to put this row back, with the
+file's own version, beside the `role` and blank-artist seeds.
 
 ## `idSong` is reused
 

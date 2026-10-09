@@ -11,8 +11,8 @@ license: CC-BY-SA-4.0
 metadata:
   category: kodi-data
   verified-kodi: "21.3 Omega, 22.0b1 Piers, 22.0b2 Piers"
-  verified-platform: "Linux x86_64, armv7l"
-  verified-date: "2026-10-08"
+  verified-platform: "Linux x86_64, armv7l, Linux armv7 (LibreELEC)"
+  verified-date: "2026-10-09"
   verified-method: "observed"
 ---
 
@@ -179,67 +179,20 @@ For an add-on that writes `plugin://` rows into the library:
   coming; the earlier Omega observation stands — movies were deleted and the
   add-on did not rebuild them until a repair pass ran.
 
-## A plugin as a TV source: bind the root *and* every show folder
+## A plugin as a scanner source
 
-Binding a plugin directory as `tvshows` content and scanning it is not enough
-to import a show. On 22.0b2 Piers the scanner listed every show folder the
-plugin returned and imported none, logging only
-`VideoInfoScanner: No (new) information was found in dir plugin://…/tvshows/`
-(observed; the shows appeared on the next scan once each folder had its own
-binding).
+The scanner-side facts live in [plugin-sources.md](plugin-sources.md), one section each:
 
-The cause is how Kodi walks up a plugin path. `URIUtils::GetParentPath`
-treats the parent of **any** `plugin://` path that still has a file name as the
-plugin root `plugin://<addon id>/`, not the directory above it
-(`xbmc/utils/URIUtils.cpp` lines 532–549 at `e513e0ff`: the options are
-stripped first, then the whole file name). `CVideoDatabase::GetScraperForPath`
-looks the folder's own `path` row up and, finding no content on it, "drills up
-until a scraper is configured" through exactly that function
-(`xbmc/video/VideoDatabase.cpp` lines 8678 and 8784–8790), so from
-`plugin://<id>/tvshows/<show>/` it reaches the plugin root, which has no
-binding, and the folder is skipped without a line of its own
-(`RetrieveVideoInfo` drops an item whose scraper lookup fails,
-`xbmc/video/VideoInfoScanner.cpp` line 924 onward).
-
-What works, as the phase-0 probe found and the import confirmed:
-
-- Bind the root with `VideoLibrary.SetSourceContent` (`content: "tvshows"`,
-  `scraperid: "metadata.local"`), **and** bind each show folder the same way
-  with `containssingleitem: true`. The folder then owns a `path` row with
-  content, and the scan of the root imports the show and its episodes
-  (observed: the same root scan that had imported nothing added every show
-  and episode once the folders were bound).
-- The add-on's manifest must declare a `<medialibraryscanpath>` **for each
-  content type** it scans. `CPluginDirectory::IsMediaLibraryScanningAllowed`
-  keys the lookup on the scraper's content (`xbmc/filesystem/PluginDirectory.cpp`
-  lines 564–590; the parser is `xbmc/addons/PluginSource.cpp` lines 26–38). With
-  only `content="movies"` declared the scan ends at once with
-  `VideoInfoScanner: Plugin '…' does not support media library scanning for
-  'TV shows' content` (observed).
-- Episodes are matched to their show by directory: the scanner lists the show
-  folder recursively and files each item whose tag carries season and episode
-  numbers (`ProcessItemByVideoInfoTag`, `VideoInfoScanner.cpp` lines 1998–2014).
-  A tag is accepted when `season >= 0 and episode > 0`, or — for a plugin
-  item only — `season > 0 and episode >= 0`. **Season 0 with no episode number
-  never imports** (observed: every unnumbered special stayed out of the
-  library while its numbered neighbours came in). Nothing logs the refusal
-  beyond `Could not enumerate file`.
-- A show folder may carry a `hash` property. `EnumerateSeriesFolder` compares it
-  with the hash stored for the folder and skips the listing when they match
-  (`VideoInfoScanner.cpp` lines 1836–1846; the stored hash is written after the
-  episodes were added). The root listing's own hash is built from each folder's
-  path, size and **date at day precision** (`GetPathHash`, lines 2945–2965), so
-  a show whose contents changed has to present a different `setDateTime` day or
-  a scan of the root skips every folder at once (`Skipping dir … due to no
-  change`, observed for each unchanged show).
-- `SetSourceContent` with `content: "none"` deletes the rows under the path
-  only with `clearmode: "remove"`; that branch alone calls
-  `RemoveContentForPath` (`xbmc/interfaces/json-rpc/VideoLibrary.cpp` lines
-  1044–1046), and `GetSubPaths` makes it cover every `path` row with the given
-  prefix (`VideoDatabase.cpp` line 6036 onward), shows included. `"clear"`
-  unbinds the scraper and leaves the rows (observed on 22.0b2: a `"clear"` left
-  every movie in place; a `"remove"` on a library root took its movies and its
-  shows in one call).
+- A plugin as a TV source: bind the root *and* every show folder
+- An episode's `tvshow.*` and `season.*` art is the show's and the season's
+- A path row per item costs the scanner, once
+- `UpdateLibrary(video)` with no path lists every bound plugin folder
+- An InfoTag is a pointer into its ListItem
+- A music scan with a dialog lists every directory twice
+- A plugin folder listed in a movies directory becomes a phantom disc
+- A scan requested while one is running stops it
+- A stopped music scan leaves a directory hash without its songs
+- A plugin as a music source: one directory at a time
 
 ## What the public API cannot set or list
 
@@ -310,13 +263,17 @@ Only touch a profile that is not currently open.
 
 ## Open questions
 
-- Whether Clean Library's behaviour differs for music added from a `plugin://`
-  source has not been tested — only video was observed. The Omega run removed
-  movies and kept episodes; the files loop treats every media type alike and
-  keys the `<medialibraryscanpath>` lookup on the row's scraper content
-  (sourced, above), so the asymmetry has to come from what that add-on declared
-  or answered per content type (inferred). Its declarations at the time were not
-  recorded.
+
+- The Omega Clean Library run removed movies and kept episodes; the files loop
+  treats every video type alike and keys the `<medialibraryscanpath>` lookup on
+  the row's scraper content (sourced, above), so the asymmetry has to come from
+  what that add-on declared or answered per content type (inferred). Its
+  declarations at the time were not recorded. Music is settled above: the music
+  cleaner never asks.
+- Why a burst of music setters costs 3–5 ms a statement on an NVMe disk in WAL
+  mode while an isolated call answers in under a millisecond was not found; the
+  statements themselves are the measured cost, and neither the widget refreshes
+  (silenced under a scan) nor parallel clients changed it.
 - Whether Kodi holds any add-on enablement state in memory for non-active
   profiles, which would delay or defeat a direct `Addons33.db` edit, is untested.
 - Whether a show folder's own binding is needed on Omega as well was not

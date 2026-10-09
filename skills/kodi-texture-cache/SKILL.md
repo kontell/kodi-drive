@@ -9,9 +9,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: kodi-data
-  verified-kodi: "21.3 Omega, 22.0b1 Piers"
-  verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-kodi: "22.0b2 Piers, 21.3 Omega, 22.0b1 Piers"
+  verified-platform: "Linux x86_64, Linux armv7 (LibreELEC)"
+  verified-date: "2026-10-09"
   verified-method: "observed"
 ---
 
@@ -113,6 +113,21 @@ The database also differs: `Textures13` on Omega, `Textures14` on Piers.
 - `folder.png` is ignored, with no fallback and no warning.
 - A cache entry without its `sizes` row is never found.
 - A cache key with upper-case percent-hex renders blank.
+
+## Kodi re-encodes every image it caches; only the server can save that work
+
+`CTextureCacheJob::CacheTexture` loads the image (`LoadImage`) and hands
+the decoded texture to `CPicture::CacheTexture`, which resizes to the cache
+limits and writes Kodi's own `.jpg` (or `.png` when the texture has alpha)
+— there is no copy-through for an image that already fits
+(`xbmc/TextureCacheJob.cpp`, `xbmc/pictures/Picture.cpp`). A 4000×6000
+poster is therefore decoded in full on the device for a cache file a
+fraction of the size, and on a Raspberry Pi that decode is most of the
+cost of an import. The only saving is upstream: ask the server for an
+image already at the cache height and encoded as JPEG (Jellyfin takes
+`MaxHeight` and `Quality` on its image routes and caches the result), so
+Kodi decodes a small JPEG and never takes the alpha branch. Changing the
+URL changes the cache key, so the art re-caches once.
 
 ## Open questions
 

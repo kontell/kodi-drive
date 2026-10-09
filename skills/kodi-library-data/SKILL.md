@@ -274,6 +274,25 @@ directories listed twice over for the rest of the scan (one album listing
 scan of a plugin source and draw any progress yourself. The video scanner
 has no counting thread; its dialog costs no extra listing.
 
+## A recursive plugin movies root lists every sub-folder on every scan
+
+For movies content `CVideoInfoScanner::DoScan` recurses into each folder of
+a directory when the path's `scanRecursive` is set, and skips a sub-folder
+only when it is marked unchanged — a mark that needs the folder's stat
+mtime from the listing (`DIR_PROPERTY_STAT_MTIME`) to match the stored
+fast hash (`xbmc/video/VideoInfoScanner.cpp`, the loop over `items` before
+`items.Stack()` and the recursion loop after `OnDirectoryScanned`). A
+plugin folder item carries no stat mtime and `GetFastHash` on a plugin path
+is empty, so no plugin sub-folder is ever marked: a recursive plugin root
+lists every one of its folders on every scan, each skipped afterwards by
+its own listing hash. The `hash` property that lets a *tvshows* folder be
+skipped without a listing (`RetrieveInfoForTvShow`) is not read on the
+movies path. Bind a plugin movies root non-recursive, scan a changed folder
+by name, and switch recursion on only around a deliberate walk of the whole
+root. Each movie folder under a plugin root needs its own content binding,
+as a show folder does, because `GetScraperForPath` takes a plugin path's
+parent to be the plugin root.
+
 ## A scan requested while one is running stops it
 
 `VideoLibrary.Scan` and `AudioLibrary.Scan` both execute the `UpdateLibrary`

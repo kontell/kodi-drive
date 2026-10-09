@@ -241,6 +241,23 @@ What works, as the phase-0 probe found and the import confirmed:
   every movie in place; a `"remove"` on a library root took its movies and its
   shows in one call).
 
+## An InfoTag is a pointer into its ListItem
+
+`ListItem.getVideoInfoTag()` and `getMusicInfoTag()` return a wrapper around
+the item's own tag, not a copy: `new InfoTagVideo(GetVideoInfoTag(),
+m_offscreen)` uses the constructor that sets `owned(false)`
+(`xbmc/interfaces/legacy/ListItem.cpp`, `InfoTagVideo.cpp`,
+`InfoTagMusic.cpp` at e513e0ff), and `CFileItem::~CFileItem` deletes the tag.
+A tag taken from a temporary — `xbmcgui.ListItem().getVideoInfoTag()` — dangles
+as soon as the expression ends, and every setter on it writes freed memory.
+Observed: a 32-bit ARM Kodi 22.0b2 (LibreELEC nightly, Python 3.14)
+segfaulted twice in `InfoTagVideo::setGenres` on exactly that line, at the
+start of a plugin listing during a video scan (`kodi_crashlog`, frame 0
+`setGenres`, scanner thread in `CScriptRunner::WaitOnScriptResult` under
+`EnumerateSeriesFolder`); the same code had listed the same library on an
+x86_64 22.0b2 Flatpak for weeks without a symptom. Keep the ListItem in a
+name that outlives every use of its tag.
+
 ## A scan requested while one is running stops it
 
 `VideoLibrary.Scan` and `AudioLibrary.Scan` both execute the `UpdateLibrary`
@@ -399,14 +416,6 @@ Only touch a profile that is not currently open.
 
 ## Open questions
 
-- A 32-bit ARM Kodi 22.0b2 (LibreELEC nightly, Python 3.14) segfaulted in
-  `XBMCAddon::xbmc::InfoTagVideo::setGenres` while a plugin listing of a show
-  folder ran inside a video scan that had imported some three thousand
-  episodes over twenty-six minutes (`kodi_crashlog`, `Program terminated with
-  signal SIGSEGV`, frame 0 in `setGenres`); the same listing code imported the
-  same library on an x86_64 22.0b2 Flatpak without incident. Memory headroom
-  on the device was low. Whether this is the binding, the Python build or
-  memory is not known.
 
 - The Omega Clean Library run removed movies and kept episodes; the files loop
   treats every video type alike and keys the `<medialibraryscanpath>` lookup on

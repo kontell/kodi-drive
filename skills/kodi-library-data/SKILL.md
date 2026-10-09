@@ -12,7 +12,7 @@ metadata:
   category: kodi-data
   verified-kodi: "21.3 Omega, 22.0b1 Piers, 22.0b2 Piers"
   verified-platform: "Linux x86_64, armv7l"
-  verified-date: "2026-10-08"
+  verified-date: "2026-10-09"
   verified-method: "observed"
 ---
 
@@ -241,6 +241,79 @@ What works, as the phase-0 probe found and the import confirmed:
   every movie in place; a `"remove"` on a library root took its movies and its
   shows in one call).
 
+## A plugin as a music source: one directory at a time
+
+Importing songs from a `plugin://` listing works through `AudioLibrary.Scan`
+with a `directory`, without registering a music source (observed on 22.0b2:
+a five-figure song library imported from one scan of the plugin's music root).
+What the music scanner does differently from the video one decides the layout.
+
+- **A scan replaces exactly one directory.** `RetrieveMusicInfo` calls
+  `RemoveSongsFromPath(strDirectory, songsMap)` and the declaration defaults
+  `exact` to `true` (`xbmc/music/MusicDatabase.h`, the `RemoveSongsFromPath`
+  declaration; `xbmc/music/infoscanner/MusicInfoScanner.cpp`, in
+  `RetrieveMusicInfo`), so the songs on that path are deleted and re-added from
+  the listing, and a folder the root listing no longer names keeps its songs.
+  Ids, play counts and last-played survive by **file name** (`FileItemsToAlbums`
+  looks each item's path up in the map and copies `idSong`, `iTimesPlayed`,
+  `lastPlayed`). To remove a song, list its directory without it; to remove an
+  album, list its directory empty; a root walk removes nothing on its own
+  (observed: a root scan with every album folder absent from the root listing
+  left every song; the same scan with the folders still listed and each listing
+  empty removed them all and the orphan albums and artists with them).
+- **A song's URL must be a file, not a query.** The music database stores a
+  song as a path row plus a file name through `URIUtils::Split`
+  (`CMusicDatabase::SplitPath`), and `Split` drops the options from the file
+  name (`xbmc/utils/URIUtils.cpp`, the "if actual uri, ignore options" branch),
+  where `CVideoDatabase::SplitPath` keeps a plugin URL whole. Observed on
+  22.0b2: songs listed as `plugin://…/<album>/?mode=play&id=<id>` came back
+  from `AudioLibrary.GetSongs` with `file` equal to the bare directory, every
+  song of an album alike — unplayable and unmatched on a rescan. Listed as
+  `plugin://…/<album>/<id>.<ext>` they came back intact.
+- **A new song's play count is zero whatever the tag says.** `CSong::CSong(CFileItem&)`
+  sets `iTimesPlayed = 0` (`xbmc/music/Song.cpp`); only a rescan of an existing
+  row keeps the database's value. Play counts go in afterwards with
+  `AudioLibrary.SetSongDetails`.
+- **Kodi takes no art from a plugin listing.** `CFileItem::GetUserMusicThumb`
+  returns an empty string for `IsPlugin()` paths (`xbmc/FileItem.cpp`), so
+  `FindArtForAlbums` finds nothing and `RetrieveLocalArt` lists every added
+  album directory a second time after the walk, looking for folder art it
+  cannot see (observed: one extra listing per new album, each on a fresh
+  interpreter). Album and artist art go in with `SetAlbumDetails` and
+  `SetArtistDetails`.
+- **Every setter is a burst of autocommit statements.** With the `database`
+  log component on (`debug.setextraloglevel` = `[131072]`), one
+  `AudioLibrary.SetSongDetails` carrying only `playcount` and `lastplayed`
+  ran nine statements — `UPDATE song …`, `DELETE FROM song_genre …`, one
+  `INSERT INTO song_genre …` per genre, `UPDATE song SET strGenres …` — at
+  3–5 ms each on an NVMe disk with the database in WAL mode (observed on
+  22.0b2). An isolated call answers in under a millisecond; twenty-five in a
+  row cost 36–47 ms each, and eight parallel HTTP clients made each call
+  slower, not the burst faster.
+- **Announcements made while the music scanner is busy are a transaction.**
+  `AnnounceUpdate` in `xbmc/music/MusicDatabase.cpp` (the unnamed-namespace
+  helper) sets `data["transaction"] = true` when
+  `CMusicLibraryQueue::IsScanningLibrary()`, and the home-screen widget
+  provider returns before refreshing on such an announcement
+  (`xbmc/guilib/listproviders/DirectoryProvider.cpp`, the subscriber's
+  `Announce`). Outside a scan, every `SetSongDetails` made Estuary's music
+  widgets re-query the library (observed: `CDirectoryProvider[…random_albums.xsp]:
+  refreshing...` and its three siblings after each burst); inside one, none did.
+  `CVideoDatabase::AnnounceUpdate` carries no such flag.
+- **Clean Library never asks about a music row and never deletes one.**
+  `CleanupSongsByIds` tests each song with `CFile::Exists`, and
+  `CPluginFile::Exists` returns `true` unconditionally
+  (`xbmc/filesystem/PluginFile.cpp`); the video cleaner's `check_exists` route
+  (above) has no music counterpart. Observed on 22.0b2: `AudioLibrary.Clean`
+  with the add-on enabled finished in under a second and kept every song.
+- **`Player.Open` by `songid` cannot play a plugin song.** JSON-RPC opens
+  `musicdb://songs/<id>.<ext>`, and `CMusicDatabaseFile::TranslateUrl`
+  (`xbmc/filesystem/MusicDatabaseFile.cpp`) resolves that to the stored path
+  and opens it as a file, which a `plugin://` URL cannot be (observed: `Init:
+  Error opening file musicdb://songs/<id>.mp3`, `PAPlayer::QueueNextFileEx -
+  Failed to create the decoder`). Opened by its `file` — what the music windows
+  do — the same song resolved through the plugin and played.
+
 ## What the public API cannot set or list
 
 Three fields read back as if the setter had failed. None of them is a bug in
@@ -310,13 +383,16 @@ Only touch a profile that is not currently open.
 
 ## Open questions
 
-- Whether Clean Library's behaviour differs for music added from a `plugin://`
-  source has not been tested — only video was observed. The Omega run removed
-  movies and kept episodes; the files loop treats every media type alike and
-  keys the `<medialibraryscanpath>` lookup on the row's scraper content
-  (sourced, above), so the asymmetry has to come from what that add-on declared
-  or answered per content type (inferred). Its declarations at the time were not
-  recorded.
+- The Omega Clean Library run removed movies and kept episodes; the files loop
+  treats every video type alike and keys the `<medialibraryscanpath>` lookup on
+  the row's scraper content (sourced, above), so the asymmetry has to come from
+  what that add-on declared or answered per content type (inferred). Its
+  declarations at the time were not recorded. Music is settled above: the music
+  cleaner never asks.
+- Why a burst of music setters costs 3–5 ms a statement on an NVMe disk in WAL
+  mode while an isolated call answers in under a millisecond was not found; the
+  statements themselves are the measured cost, and neither the widget refreshes
+  (silenced under a scan) nor parallel clients changed it.
 - Whether Kodi holds any add-on enablement state in memory for non-active
   profiles, which would delay or defeat a direct `Addons33.db` edit, is untested.
 - Whether a show folder's own binding is needed on Omega as well was not

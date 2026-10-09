@@ -9,9 +9,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: python-addon
-  verified-kodi: "21.3 Omega"
+  verified-kodi: "21.3 Omega, 22.0b2 Piers"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-date: "2026-10-09"
   verified-method: "sourced"
 ---
 
@@ -63,6 +63,21 @@ turning on interpreter reuse converts a latent bug into an unbounded hang, in
 routes written before reuse existed.
 
 Measured: 20 s and climbing, with no ceiling.
+
+Reuse is also conditional on timing. `CScriptInvocationManager::GetLanguageInvoker`
+hands the parked thread to the next script only when `Reuseable(script)` holds,
+and that requires the previous run to have reached its done state
+(`xbmc/interfaces/generic/ScriptInvocationManager.cpp`, `GetLanguageInvoker`);
+otherwise it releases the thread and creates a fresh interpreter. A caller that
+asks for the next listing the instant `endOfDirectory` returns — the music
+scanner walking a plugin's folders — wins that race every time there is no work
+between two listings, and loses it every time there is. Observed on 22.0b2 with
+`reuselanguageinvoker` on: a root walk whose directories were all new, so Kodi
+imported between listings, ran every listing on the reused interpreter in about
+4 ms; the same walk over unchanged directories, and the scanner's post-scan art
+pass, logged `Python Interpreter Initialized` for every directory and spent
+87–93 ms on each. A plugin cannot change this from its side: the race is between
+Kodi's own threads after the script has finished its work.
 
 ## Which callers actually wait
 

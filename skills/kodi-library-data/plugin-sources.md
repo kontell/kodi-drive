@@ -227,6 +227,28 @@ kept the grouping, because `GetMovieId` resolves a version's file through
 `videoversion`. A rescan of the folder *before* grouping re-adds the
 duplicate (observed after `VideoLibrary.RemoveMovie` on it).
 
+## The info dialog loads a library movie's cast only through a scraper on its folder
+
+`CGUIWindowVideoBase::OnItemInfo` asks `CVideoDatabase::GetScraperForPath`
+for the item's `strPath` (a library item's `m_strPath`, the directory its
+file row sits in) and `ShowInfo` loads the full details with
+`GetMovieInfo` (cast, ratings, unique ids, everything `VideoDbDetailsAll`
+names) only when that returned a scraper; without one it shows the listing
+item's own tag, which a library listing builds without cast
+(`xbmc/video/windows/GUIWindowVideoBase.cpp`). `GetScraperForPath` walks
+parents with `URIUtils::GetParentPath`, and for a plugin path that is the
+plugin root, never a bound directory in between (`xbmc/video/VideoDatabase.cpp`).
+So a plugin movie filed in a folder of its own without a binding opens an
+info dialog with an empty cast list while JSON-RPC
+`VideoLibrary.GetMovieDetails` returns the cast in full; a show whose
+folder is bound opens with its cast. Observed on 22.0b2: `Container(50).NumItems`
+was `0` for a movie in an unbound folder and `20` after
+`VideoLibrary.SetSourceContent` bound that folder (content `movies`,
+`metadata.local`, `noupdate` true), with nothing else changed. Bind every
+such folder; `noupdate` keeps `UpdateLibrary(video)` off it (`DoScan`
+returns before listing a `noupdate` path unless the scan was asked to scan
+all), so a scan of the folder by name needs the flag lifted first.
+
 ## A scan requested while one is running stops it
 
 `VideoLibrary.Scan` and `AudioLibrary.Scan` both execute the `UpdateLibrary`

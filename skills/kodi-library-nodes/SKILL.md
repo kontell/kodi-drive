@@ -133,6 +133,17 @@ worked, unchanged, after `ReloadSkin()`.
 If the log *does* carry your add-on's line, the node tree is fine and the fault
 is in the route.
 
+## A seeded tree reaches a home widget after a restart, not after `ReloadSkin()`
+
+Seeding the shipped tree into a profile whose folder already existed (it held
+only an add-on's own node folder) made `library://video/movies/` list its
+eleven entries over JSON-RPC straight away, and still after `ReloadSkin()`.
+The home screen's categories widget bound to that same path kept the one
+entry it had listed while the folder was empty, through the reload, and
+showed all twelve only after Kodi was restarted. Observed on 22.0b2 with a
+skin widget whose `<content>` is `library://video/movies/`. Tell the user a
+restart is needed, or expect the row at the next one.
+
 ## `<limit>` and `<content>` do nothing on a folder node
 
 They are smart-playlist elements. A `type="folder"` node hands its `<path>` to

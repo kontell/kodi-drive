@@ -155,6 +155,78 @@ plugin root). Bind such a folder without `containssingleitem`, which would
 make the folder the movie. The tvshows path is different: a show folder is
 listed as a folder on purpose and skipped through its `hash` property.
 
+The probe asks the directory cache first: `CFile::Exists` returns
+`g_directoryCache.FileExists`'s answer when the file's directory is cached,
+and only asks `CPluginFile::Exists` when it is not (`xbmc/filesystem/File.cpp`,
+`DirectoryCache.cpp`). Every listing `CDirectory::GetDirectory` fetches is
+cached (`IDirectory::GetCacheType` defaults to `CacheType::ONCE`, and
+`CPluginDirectory` does not override it), so a plugin folder whose listing
+Kodi fetched *before* the parent is scanned stays a folder. The probe names
+`VIDEO_TS.IFO`, `VIDEO_TS/VIDEO_TS.IFO`, `index.bdmv`, `INDEX.BDM`,
+`BDMV/index.bdmv` and `BDMV/INDEX.BDM`, so the folder, its `VIDEO_TS/` and its
+`BDMV/` all have to be cached, which `Files.GetDirectory` over JSON-RPC does
+(`DIR_FLAG_DEFAULTS`). Observed on 22.0b2 with a movie folder holding an
+`extras/` folder: scanned cold, the scanner logged `No NFO file found. Using
+title search for '…/extras/VIDEO_TS.IFO'` and `No information found for item
+'…/extras/VIDEO_TS.IFO', it won't be added to the library`; after three
+`Files.GetDirectory` calls on `…/extras/`, `…/extras/VIDEO_TS/` and
+`…/extras/BDMV/`, the same scan logged `Added video extra …/extras/Deleted
+Scene.mkv`, `Added video extra …/extras/Making Of.mkv` and `Finished adding
+video extras from dir …/extras/`. The cache entry lives until Kodi evicts it,
+so the listing has to be fetched shortly before each scan.
+
+## Extras come from an `extras/` folder, with the setting off and folder names on
+
+`CVideoInfoScanner::DoScan` hands a folder item that `IsVideoExtrasFolder`
+matches (`extras`, `bonus disc`, `bonus content`, …;
+`xbmc/video/VideoFileItemClassify.cpp`) to `AddVideoExtras` only when the
+directory's scan settings have `parent_name` (the "Movies are in separate
+folders" flag, `usedirectorynames` in `VideoLibrary.SetSourceContent`) and
+`videolibrary.ignorevideoextras` is off; the setting defaults to *on*, and
+with it on the folder is dropped from the listing before anything looks at
+it (`xbmc/video/VideoInfoScanner.cpp`, `m_ignoreVideoExtras`).
+`AddVideoExtras` takes the movie from the first non-folder item of the
+listing that `GetMovieId` knows, lists the extras folder recursively with
+the video-extension mask (`CDirectory::EnumerateDirectory`), names each extra
+by its path below the extras folder minus the extension
+(`CGUIDialogVideoManagerExtras::GenerateVideoExtra`), creates a
+`videoversiontype` row of that name (owner `AUTO`, `itemType` 2) and files the
+file through `AddVideoAsset`. So an extra's URL has to end in a video
+extension and its name is its label; a query string would be part of the
+label. Observed on 22.0b2: `…/extras/Deleted Scene.mkv` and `…/extras/Making
+Of.mkv` became `videoversion` rows with `itemType` 2 named `Deleted Scene` and
+`Making Of` on the movie found beside them, and `Player.Open` on the extra's
+URL ran the plugin, which resolved it (`VideoPlayer::OpenFile:
+…/extras/Deleted Scene.mkv`).
+
+## The scanner never groups a plugin's versions; the Versions Manager does
+
+A plugin item with an InfoTag is loaded by `CVideoTagLoaderPlugin`
+(`xbmc/video/tags/VideoTagLoaderPlugin.cpp`, chosen by
+`CVideoInfoTagLoaderFactory` for a plugin path under `metadata.local`), which
+returns `InfoType::FULL`, and `RetrieveInfoForMovie` then takes its NFO
+branch: `AddVideo` and return, with the version grouping of
+`HandleMovieSetAndVersions` (`ProcessVideoVersion`, the
+`videolibrary.similarvideoaction` setting) never reached. The branch would
+add the item as a version when the tag's `HasVideoVersions()` is set, but
+only the NFO loader sets that flag (`<hasvideoversions>`); the Python
+`InfoTagVideo` has `setVideoAssetTitle` and nothing for the flag. Observed
+on 22.0b2 with a movie folder listing two files of one movie, the second
+carrying `setVideoAssetTitle("Theatrical Cut")`: both with the setting off
+("grouping of similar videos is off") and set to automatic ("grouping of
+similar videos is automatic") the scan logged `Adding new item to movies:`
+for each file and the database held two `movie` rows of the same title, the
+second's `videoversion` row typed `Theatrical Cut` (a new movie's asset title
+becomes its version type, `SetDetailsForMovie`), with no `Converted movie id`
+line. The user's Versions Manager (context menu, Manage…, Manage versions,
+Add version) offers the same-titled movie from `GetSameVideoItems`, asks for
+the type and converts it (`ConvertVideoToVersion`): observed, the two rows
+became one movie with `Standard Edition` (default) and `Theatrical Cut`
+versions, `VideoLibrary.GetMovies` listed one, and a later scan of the folder
+kept the grouping, because `GetMovieId` resolves a version's file through
+`videoversion`. A rescan of the folder *before* grouping re-adds the
+duplicate (observed after `VideoLibrary.RemoveMovie` on it).
+
 ## A scan requested while one is running stops it
 
 `VideoLibrary.Scan` and `AudioLibrary.Scan` both execute the `UpdateLibrary`

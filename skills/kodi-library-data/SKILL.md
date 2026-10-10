@@ -12,7 +12,7 @@ metadata:
   category: kodi-data
   verified-kodi: "21.3 Omega, 22.0b1 Piers, 22.0b2 Piers"
   verified-platform: "Linux x86_64, armv7l, Linux armv7 (LibreELEC)"
-  verified-date: "2026-10-09"
+  verified-date: "2026-10-10"
   verified-method: "observed"
 ---
 
@@ -190,6 +190,8 @@ The scanner-side facts live in [plugin-sources.md](plugin-sources.md), one secti
 - An InfoTag is a pointer into its ListItem
 - A music scan with a dialog lists every directory twice
 - A plugin folder listed in a movies directory becomes a phantom disc
+- Extras come from an `extras/` folder, with the setting off and folder names on
+- The scanner never groups a plugin's versions; the Versions Manager does
 - A scan requested while one is running stops it
 - A stopped music scan leaves a directory hash without its songs
 - A plugin as a music source: one directory at a time

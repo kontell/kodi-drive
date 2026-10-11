@@ -25,21 +25,33 @@ repository root carries an
 `CLAUDE.md` that is nothing but `@AGENTS.md`. **Read it before writing code, not
 before opening the PR.**
 
-It is deliberately narrow so far — it covers code comments only — and the team
-has said it will grow as their AI policy settles. Do not assume the scope you
-last saw is the current one.
+It began as a comment policy and is no longer only that.
+[#29361](https://github.com/xbmc/xbmc/pull/29361) (merged 2026-09-22), titled
+"Stop AI → AI review → AI fixes → larger AI review loop", grew it to seven
+sections: Scope, Comments, Commit messages, Reviews, Change size, Release
+stabilization, and Before submitting. The team said from the start that it would
+grow as their AI policy settles. Do not assume the scope you last saw is the
+current one.
 
-The current rules amount to: comments explain what the code cannot, and nothing
-else. No restating the code. No mentioning approaches tried, considered,
-replaced or removed. Nothing that only makes sense as a trace of how an agent
-arrived at the result. Prefer deleting a comment over rewording it. History,
-discarded alternatives and review rationale belong in the commit message or the
-PR description.
+This skill does not restate it. Four rules are called out because each one
+forbids something an agent does unprompted:
 
-**Comments are what their maintainers object to in agent-written PRs**, and that
-is why the file exists: the PR that added it states the team is varied on AI use
-but universally agrees AI comments are terrible, and calls this their most
-pressing concern.
+- **The request is the scope boundary.** Do not fix unrelated problems found on
+  the way, and do not propose the extra work either. If the change grows
+  materially beyond the task, stop expanding it and report why.
+- **Comments explain what the code cannot, and nothing else.** No restating the
+  code, and no trace of approaches tried, replaced or removed — that history
+  belongs in the commit message or the PR description. Existing human-written
+  comments are left alone unless the change makes them incorrect.
+- **Commit message bodies wrap at 76 columns**, and are not test reports, review
+  histories or inventories of every behaviour covered.
+- **A review reports only what should block the change**, plus spelling
+  mistakes. With no blocking findings, it says so and stops.
+
+**Comments are what their maintainers objected to first in agent-written PRs**,
+and that is why the file was created: the PR that added it states the team is
+varied on AI use but universally agrees AI comments are terrible, and calls this
+their most pressing concern.
 
 A mirror is kept at [`docs/upstream/xbmc-AGENTS.md`](../../docs/upstream/xbmc-AGENTS.md)
 for offline use, with the upstream commit it was taken from. It is a snapshot
@@ -60,7 +72,8 @@ the tip but not at commit 2 of 5 will fail.
 The consequence is counter-intuitive: if your change touches existing code that
 needs reformatting under the current rules, that reformatting is a **related
 cosmetic change belonging in the same commit** — despite the general rule that
-code and cosmetics stay separate.
+code and cosmetics stay separate. What `AGENTS.md` rules out is *unrelated*
+formatting; reformatting the check demands of code you changed is not that.
 
 **Squash and organise before submitting.** Kodi wants a coherent history of
 meaningful commits, not a record of how you got there.

@@ -91,6 +91,62 @@ directory and 202–209 s under one each on a 22.0b2 Flatpak, 1,630 s against
 one movie then costs a 0.5 s scan of its folder (bound first, as a show
 folder is) instead of a re-walk of the whole directory.
 
+## What the video scanner spends on each item, and which part a plugin sets
+
+A trace of the scanner thread with the `database` log component on
+([`kodi-performance`](../kodi-performance/SKILL.md) says how to read one),
+half way through a first import of 1,788 movies from a plugin on a Raspberry
+Pi 3 (22.0b2, databases on an SD card, about 11,000 actors and 4,000 tags
+filed so far), put one movie at 600 ms:
+
+| Where | Per movie | Why |
+|---|---|---|
+| The gap before `Sqlite commit transaction` | 160–190 ms | One transaction per item (`SetDetailsForMovie`), committed to a rollback journal |
+| `insert into path …` | 20–50 ms | The item's own path row, autocommitted outside that transaction |
+| The gap after each `insert into actor_link` | 8 ms × 19 | `AddActor`'s `select actor_id from actor where name like '…'`, a table scan |
+| The gap after each `insert into tag_link` | 4 ms × 14 | `AddToTable`'s twin on `tag`, a table scan |
+| Between the play-count update and the next item | 90–110 ms | No statement of the scanner's is logged here; inferred to be `FetchActorThumbs`, since switching it off (below) took 105 ms off a movie |
+
+A plugin sets two of these. **Every cast member and every tag it lists is a
+table scan that grows with the library** (the figures are in
+`kodi-performance`), so a field added to every item is quadratic over an
+import. And **the last row is the "Download actor thumbnails" setting**
+(`videolibrary.actorthumbs`): with it on, `FetchActorThumbs` calls
+`CacheArtwork` for every cast member
+(`xbmc/video/VideoInfoScanner.cpp` lines 2604–2616 and 3157–3215 at
+`e513e0ff`), and each call is `CTextureCache::BackgroundCacheImage`
+(`xbmc/TextureCache.cpp` line 118) — a lookup in the texture database under
+`m_databaseSection` (line 270), the lock the cache's worker holds while it
+writes a cached image, then `CJobQueue::AddJob`, which searches the whole
+queue for an equal job before adding one (`xbmc/jobs/JobQueue.cpp` lines
+71–78). The texture cache is a queue with one worker
+(`CJobQueue(false, 1, CJob::PRIORITY_LOW_PAUSABLE)`, `TextureCache.cpp`
+lines 39–40), and a first import fills it faster than the worker empties
+it: during the 1,300 s scan the worker cached 2,968 actor pictures of the
+17,735 the listing named.
+
+Turning the setting off over JSON-RPC for the length of the scan
+(`Settings.SetSettingValue`) and back on afterwards, observed on the same
+import:
+
+| | Setting on | Off for the scan |
+|---|---|---|
+| Stock databases | 1,265 s | 1,078 s |
+| WAL, and `NOCASE` indexes on `actor`, `tag` and `studio` names | 446 s | 259 s |
+
+The pictures survive it. `xbmc.Actor`'s thumbnail fills both `thumbUrl` and
+`thumb` (`xbmc/interfaces/legacy/InfoTagVideo.cpp` lines 42–44), `AddActor`
+stores `art_urls` and the `art` row whenever they are set
+(`xbmc/video/VideoDatabase.cpp`, `AddActor`), and the info dialog shows
+`thumb` when it has one whatever the setting says
+(`xbmc/video/dialogs/GUIDialogVideoInfo.cpp` lines 383–386); the image is
+fetched when it is first shown. The scanner reads the setting for each item
+(`VideoInfoScanner.cpp` line 2606), not once a scan. Without the setting the
+WAL run held between 6.6 and 8.9 movies a second for the whole import; with
+it the same run fell from 6.6 a second to 3.4 as the queue grew. An
+add-on that flips a user's setting owes it back after a crash: record the
+old value before the write.
+
 ## `UpdateLibrary(video)` with no path lists every bound plugin folder
 
 The builtin with no directory scans every path row with content, and for a
@@ -209,6 +265,44 @@ a scan was stopped by hand. Nothing Kodi offers rescans such a directory
 short of changing what it lists (a date on each item moves the hash) or a
 scan with `SCAN_RESCAN`, which a plugin cannot request through JSON-RPC.
 
+## A music scan re-lists every album it added, out of a cache of fifty
+
+After the walk, `RetrieveLocalArt` asks for each added album's directory
+again, looking for cover files (`AddLocalArtwork`,
+`xbmc/music/infoscanner/MusicInfoScanner.cpp` line 2246 at `e513e0ff`,
+called from lines 2125 and 2159). The request carries `DIR_FLAG_READ_CACHE`,
+and the directory cache holds fifty listings, dropping the least recently
+used (`MAX_CACHED_DIRS`, `xbmc/filesystem/DirectoryCache.cpp` lines 24 and
+212–233). So the second request is free while one scan covered a few dozen
+directories, and a second full plugin listing of every album once it covered
+more. The second request is made whenever the music artwork level takes
+any extra art type (`AddLocalArtwork` returns early otherwise, lines
+2224–2236).
+
+Observed on 22.0b2 on a Raspberry Pi 3, the same plugin library scanned as
+one root and as directories that each list thirty-two album folders:
+
+| Library | One root | Thirty-two album folders to a scan |
+|---|---|---|
+| 87 album folders, rollback journal | 27.2 s | 20.6 s |
+| 87 album folders, WAL | 21.5 s | 12.0 s |
+| 1,557 album folders, WAL | 323 s | 293 s |
+
+**The grouping directory needs a parent that lists it.** The scanner decides
+whether a directory it was asked to scan exists from the cached listing of
+its parent: `CDirectory::Exists` returns what `FileExists` finds there
+whenever the parent is in the cache (`xbmc/filesystem/Directory.cpp` lines
+383–389), and a directory the cached parent does not name is skipped with
+`directory '…' does not exist - skipping scan` (`MusicInfoScanner.cpp` line
+145). Kodi caches a parent on its own account — the art pass lists the
+common path of an album whose songs span two directories (`AddAlbumArtwork`,
+lines 2069–2081). Observed: of three grouping directories placed under the
+plugin's music root the first two were scanned and the third was skipped
+with that warning; under a parent of their own whose listing names every one
+of them, all were scanned. A new album folder scanned by its own name, whose
+parent was cached before the album existed, fails the same check (inferred;
+not observed).
+
 ## A plugin as a music source: one directory at a time
 
 Importing songs from a `plugin://` listing works through `AudioLibrary.Scan`
@@ -241,14 +335,19 @@ What the music scanner does differently from the video one decides the layout.
 - **A new song's play count is zero whatever the tag says.** `CSong::CSong(CFileItem&)`
   sets `iTimesPlayed = 0` (`xbmc/music/Song.cpp`); only a rescan of an existing
   row keeps the database's value. Play counts go in afterwards with
-  `AudioLibrary.SetSongDetails`.
+  `AudioLibrary.SetSongDetails` — for the played songs only: `UpdateSong`
+  writes `dateAdded` on every call, from `GetMediaDateFromFile`
+  (`xbmc/music/MusicDatabase.cpp` lines 1371–1386 at `e513e0ff`), which is
+  the current time for a path with no valid modification date (lines
+  13859–13881). A setter sent to a song that needed nothing re-stamps it as
+  added now.
 - **Kodi takes no art from a plugin listing.** `CFileItem::GetUserMusicThumb`
   returns an empty string for `IsPlugin()` paths (`xbmc/FileItem.cpp`), so
   `FindArtForAlbums` finds nothing and `RetrieveLocalArt` lists every added
   album directory a second time after the walk, looking for folder art it
   cannot see (observed: one extra listing per new album, each on a fresh
-  interpreter). Album and artist art go in with `SetAlbumDetails` and
-  `SetArtistDetails`.
+  interpreter; the section above says when that listing is free). Album and
+  artist art go in with `SetAlbumDetails` and `SetArtistDetails`.
 - **Every setter is a burst of autocommit statements.** With the `database`
   log component on (`debug.setextraloglevel` = `[131072]`), one
   `AudioLibrary.SetSongDetails` carrying only `playcount` and `lastplayed`

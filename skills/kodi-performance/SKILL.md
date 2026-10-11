@@ -188,15 +188,27 @@ tenths of a second.
 runs `select actor_id from actor where name like '<name>'` for each cast
 member, director and writer (`xbmc/video/VideoDatabase.cpp` line 1595), and
 `AddToTable` the same statement for each tag, studio, genre and country
-(line 1352). LIKE ignores case; `actor.name` has only a case-sensitive
-unique index and the others none, so `EXPLAIN QUERY PLAN` reports `SCAN` for
-all of them and each lookup costs as much as the table has rows. Observed on
+(line 1352). Each of those tables has a unique index on `name`
+(`xbmc/video/VideoDatabaseDDL.cpp` lines 199–202, 286 and 635–639), but it
+is a BINARY one and LIKE ignores case, so SQLite cannot use it for the
+lookup: `EXPLAIN QUERY PLAN` reports `SCAN` for all of them and each lookup
+costs as much as the table has rows. Observed on
 the Pi 3, Kodi's statements against a library of 1,788 movies and 4,300
 episodes: 28.2 ms a lookup on `actor` (38,284 rows), 6.1 ms on `tag` (8,140),
 2.3 ms on `studio` (2,443). With an index on `name COLLATE NOCASE` beside
 Kodi's own the same statements took 0.15–0.21 ms and returned the same rows.
 What a plugin lists decides how many lookups an item makes: one per cast
 member and one per tag.
+
+The same rows, not the same order. Kodi takes the first row of that lookup
+with no `ORDER BY`, and where two rows differ by case alone the index
+changes which one that is: scanning its BINARY index Kodi meets the spelling
+that sorts first (capitals before lower case), searching a NOCASE one it
+meets the row with the lowest id. Kodi's own lookup never creates such a
+pair, since it finds the existing spelling; another writer can. Observed
+with `jean reno`, `Jean Reno` and `JEAN RENO` inserted in that order on a
+MyVideos149 schema: the first `actor_id` returned went from the capitals'
+row to the lower-case one.
 
 **A season read is a listing of the show's seasons.**
 `VideoLibrary.GetSeasonDetails` calls `GetSeasonInfo`, which runs

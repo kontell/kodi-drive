@@ -12,7 +12,7 @@ metadata:
   category: kodi-data
   verified-kodi: "21.3 Omega, 22.0b1 Piers, 22.0b2 Piers"
   verified-platform: "Linux x86_64, armv7l, Linux armv7 (LibreELEC)"
-  verified-date: "2026-10-09"
+  verified-date: "2026-10-11"
   verified-method: "observed"
 ---
 

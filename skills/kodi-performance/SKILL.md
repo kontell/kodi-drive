@@ -11,7 +11,7 @@ metadata:
   category: diagnosis
   verified-kodi: "22.0b2 Piers, 22.0-BETA1 Piers, 21.3 Omega"
   verified-platform: "Android TV, Linux x86_64, Linux armv7 (LibreELEC)"
-  verified-date: "2026-10-09"
+  verified-date: "2026-10-11"
   verified-method: "observed"
 ---
 
@@ -80,6 +80,47 @@ That reasoning is correct at 130 ms. At 22 seconds it is wrong, and the fast
 path silently never fires. **Any threshold reasoning of the form "the slow path
 is nearly here" has to be evaluated at ARM speed.**
 
+## A Monitor nobody waits on taxes every Python thread in Kodi
+
+Kodi queues one callback for every announcement on **every `xbmc.Monitor`
+object alive**, in a single queue for the whole process (`g_callQueue`,
+`xbmc/interfaces/legacy/CallbackHandler.cpp` lines 36–43 at `e513e0ff`). A
+callback leaves the queue only when the thread that created its Monitor runs
+`makePendingCalls`, and the two places that call it are `Monitor.waitForAbort`
+and `xbmc.sleep` (`xbmc/interfaces/legacy/Monitor.cpp` lines 39–60,
+`ModuleXbmc.cpp` lines 152–166). `abortRequested()` reads an event and takes
+nothing off (`Monitor.cpp` lines 62–66). `makePendingCalls` walks the queue
+from the front, steps over every entry that belongs to another thread
+(`isStateOk`, `xbmc/interfaces/python/CallbackHandler.cpp` lines 33–45) and
+goes back to the front after each callback it runs (`CallbackHandler.cpp`
+lines 64–122).
+
+So a thread that constructs a Monitor and then blocks somewhere else — a
+websocket's `run_forever`, a long HTTP read, a `queue.get()` — leaves its
+callbacks queued for as long as it blocks, and every other Python thread in
+Kodi, in every add-on, walks past all of them on each 100 ms slice of its own
+wait. During a library import that is one callback per row written.
+
+Observed on 22.0b2 on a Raspberry Pi 3, importing 22,381 songs from a plugin
+while a websocket thread of the same add-on held such a Monitor: the scan
+fell from 72 songs a second to 13 in seven minutes and was still falling when
+it was stopped, one plugin listing took 139 ms in the first minute and 800 ms
+in the eighth, and six `LanguageInvoker` threads used 9–23 % of a core each
+throughout. With the Monitor made only for that thread's own waits, the same
+library scanned in 323 s and never slower than 60 songs a second, a listing
+took 32–40 ms from the first minute to the last, and one `LanguageInvoker`
+thread was busy: the plugin's own.
+
+- Make a Monitor on the thread that will wait on it, for the wait:
+  `xbmc.Monitor().waitForAbort(n)` is a complete reconnect delay.
+- A thread that keeps one while it works has to take its callbacks off:
+  `monitor.waitForAbort(0.001)` between batches. **`waitForAbort(0)` waits for
+  ever** — a timeout of zero or less is infinite (`Monitor.cpp` lines 44–45).
+- A thread that only polls `abortRequested()` needs no Monitor of its own.
+- Your own writes do it to you: a burst of JSON-RPC setters from a thread
+  that does not wait in between queues a callback per setter on that
+  thread's Monitor.
+
 ## Specific costs worth knowing
 
 **`import requests` costs 1.11 s on Kodi 21 and 0.93 s on Kodi 22** inside Kodi's
@@ -117,6 +158,62 @@ connection but never reached the banner until the box was power-cycled.
 Stream payloads, keep one connection per interpreter, and watch
 `MemAvailable` — it counts the cache being thrashed.
 
+**Kodi's library databases are rollback journals, and every write waits on
+the card for it.** On a connection Kodi sets a cache size,
+`synchronous='NORMAL'` and nothing about the journal
+(`xbmc/dbwrappers/sqlitedataset.cpp` line 421 at `e513e0ff`), so a database
+Kodi created stays in SQLite's default `delete` mode and one a tool switched
+to WAL stays WAL — the mode is stored in the file. In `delete` mode every
+autocommit statement of a JSON-RPC setter, and every item a scanner commits,
+is a journal file written, synced and removed. Observed on a Raspberry Pi 3
+with its databases on an SD card (22.0b2, a library of 1,353 songs; 82, 21
+and 6 calls):
+
+| Call | `delete` | WAL |
+|---|---|---|
+| `AudioLibrary.SetAlbumDetails` | 57 ms | 16 ms |
+| `AudioLibrary.SetArtistDetails` | 148 ms | 14 ms |
+| `AudioLibrary.SetSongDetails` | 133 ms | 17 ms |
+
+With 22,381 songs in the library the same three calls cost 93, 163 and
+288 ms in `delete` mode against 54, 28 and 47 ms in WAL.
+
+An add-on that may not open Kodi's databases cannot change the mode; one
+that may, changes it once with Kodi's library idle. A writer that finds the
+database locked sleeps 100 ms before it asks again (`busy_callback`,
+`sqlitedataset.cpp` lines 205–209), so two writers on one database queue in
+tenths of a second.
+
+**Kodi's video scanner looks every name up with a table scan.** `AddActor`
+runs `select actor_id from actor where name like '<name>'` for each cast
+member, director and writer (`xbmc/video/VideoDatabase.cpp` line 1595), and
+`AddToTable` the same statement for each tag, studio, genre and country
+(line 1352). LIKE ignores case; `actor.name` has only a case-sensitive
+unique index and the others none, so `EXPLAIN QUERY PLAN` reports `SCAN` for
+all of them and each lookup costs as much as the table has rows. Observed on
+the Pi 3, Kodi's statements against a library of 1,788 movies and 4,300
+episodes: 28.2 ms a lookup on `actor` (38,284 rows), 6.1 ms on `tag` (8,140),
+2.3 ms on `studio` (2,443). With an index on `name COLLATE NOCASE` beside
+Kodi's own the same statements took 0.15–0.21 ms and returned the same rows.
+What a plugin lists decides how many lookups an item makes: one per cast
+member and one per tag.
+
+**A season read is a listing of the show's seasons.**
+`VideoLibrary.GetSeasonDetails` calls `GetSeasonInfo`, which runs
+`GetSeasonsNav` for the whole show and picks one row out of it
+(`xbmc/video/VideoDatabase.cpp` lines 2090–2126 at `e513e0ff`), and
+`SetSeasonDetails` reads the season the same way before it writes
+(`xbmc/interfaces/json-rpc/VideoLibrary.cpp` line 733). Observed on a
+Raspberry Pi 3 with 4,300 episodes in the library: 79 ms a
+`GetSeasonDetails`, 79 ms for one `GetSeasons` of the same show with the same
+properties, and 120 ms a `SetSeasonDetails` whether the database was in
+`delete` or WAL mode. Episodes are cheaper but the shape is the same:
+50 ms a `GetEpisodeDetails`, 64 ms for six episodes of one show in one
+`GetEpisodes`. Read a show's rows with the listing, and do not send a
+season a setter for what the scanner can file with the show (season names
+through `addSeason`, season art through `addAvailableArtwork` with
+`season=`).
+
 **Full-scan-and-hash in Python does not scale.** Where a gate needs a fingerprint
 of a library, compute it in SQL as an aggregate, or maintain a checksum on write.
 Materialising rows into Python tuples, sorting, `repr`-ing and hashing them is
@@ -136,6 +233,20 @@ kodi-logtail since | grep -E 'your-addon-prefix'
 Add a log line at each stage boundary in the code you are timing. Three
 timestamps beat two, because two only tell you that time passed.
 
+For time inside Kodi's own database code, switch the `database` log
+component on for a minute. `Settings.SetSettingValue` with
+`debug.setextraloglevel` = `[131072]` and `debug.extralogging` = `true` takes
+effect at once over JSON-RPC (`xbmc/utils/log.cpp` lines 116–128 at
+`e513e0ff`), so a running scan can be sampled and the component switched off
+again. Two things about what it prints decide how to read it
+(`xbmc/dbwrappers/sqlitedataset.cpp`): `N ms for query: …` is logged for
+statements run through `exec` — the writes — and not for `query` (lines
+843–898 against 936), so a SELECT's cost is the gap before the next line of
+that thread; and `Sqlite commit transaction` is logged after the commit
+returns (lines 610–616), so a commit's cost is the gap *before* that line.
+Group the lines by thread id first: the texture cache's worker logs into the
+same stream.
+
 For process-level cost, see
 [`kodi-process-control`](../kodi-process-control/SKILL.md) — and note that
 sampling the wrong process reports a plausible ~1 MB, and Kodi's own footprint
@@ -147,6 +258,8 @@ dominates any absolute figure, so measure add-on cost as a delta.
 - A fast path early-returns on reasoning that was true in development.
 - Work queues behind unrelated work because of an incidental sort order.
 - Nothing errors, nothing is logged, and the feature merely feels slow.
+- A Monitor held by a blocked thread slows every add-on's threads, and nothing
+  names the add-on that holds it.
 
 ## Open questions
 

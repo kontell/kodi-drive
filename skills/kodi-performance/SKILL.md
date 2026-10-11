@@ -198,6 +198,22 @@ Kodi's own the same statements took 0.15–0.21 ms and returned the same rows.
 What a plugin lists decides how many lookups an item makes: one per cast
 member and one per tag.
 
+**A season read is a listing of the show's seasons.**
+`VideoLibrary.GetSeasonDetails` calls `GetSeasonInfo`, which runs
+`GetSeasonsNav` for the whole show and picks one row out of it
+(`xbmc/video/VideoDatabase.cpp` lines 2090–2126 at `e513e0ff`), and
+`SetSeasonDetails` reads the season the same way before it writes
+(`xbmc/interfaces/json-rpc/VideoLibrary.cpp` line 733). Observed on a
+Raspberry Pi 3 with 4,300 episodes in the library: 79 ms a
+`GetSeasonDetails`, 79 ms for one `GetSeasons` of the same show with the same
+properties, and 120 ms a `SetSeasonDetails` whether the database was in
+`delete` or WAL mode. Episodes are cheaper but the shape is the same:
+50 ms a `GetEpisodeDetails`, 64 ms for six episodes of one show in one
+`GetEpisodes`. Read a show's rows with the listing, and do not send a
+season a setter for what the scanner can file with the show (season names
+through `addSeason`, season art through `addAvailableArtwork` with
+`season=`).
+
 **Full-scan-and-hash in Python does not scale.** Where a gate needs a fingerprint
 of a library, compute it in SQL as an aggregate, or maintain a checksum on write.
 Materialising rows into Python tuples, sorting, `repr`-ing and hashing them is

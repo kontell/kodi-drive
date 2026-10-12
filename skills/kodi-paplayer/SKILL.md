@@ -9,9 +9,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: playback
-  verified-kodi: "21.3 Omega"
+  verified-kodi: "21.3 Omega, 22.0b2 Piers"
   verified-platform: "Linux x86_64, Android TV, Android"
-  verified-date: "2026-08-13"
+  verified-date: "2026-10-12"
   verified-method: "sourced"
 ---
 
@@ -87,12 +87,37 @@ late.
 Pre-pausing at the track tail, and muting the tail to mask the gap, were both
 tried and rejected as unworkable.
 
+## A track queued ahead plays under its plugin URL, not what it resolved to
+
+PAPlayer asks for the next track five seconds before the current one ends
+(`TIME_TO_CACHE_NEXT_FILE`, `xbmc/cores/paplayer/PAPlayer.cpp` line 39 at
+`e513e0ff`), so a `plugin://` track is resolved while its predecessor is still
+playing. On 22.0b2 `OnQueueNextItem` was logged 19.5 s into a 25 s song and the
+plugin's play route ran 0.1 s later (observed).
+
+When that track starts, `xbmc.Player().getPlayingFile()` returns the plugin URL
+it was queued under. A track opened directly returns the stream the plugin
+resolved it to. Observed on 22.0b2, polled once a second across the first
+change of an album opened by `albumid`:
+
+```
+One Track 1 | http://<SERVER_URL>/Audio/<id>/stream.flac?static=true&mediaSourceId=<id>
+One Track 2 | plugin://plugin.video.example/<path>/<id>.flac
+```
+
+An add-on that recognises its own playback by the path it resolved recognises
+the first track of an album and none after it. Match a queued track by its
+plugin URL, or by an id carried in it, and expect the resolve seconds before
+the start, not at it.
+
 ## What fails silently
 
 - A seek while paused resumes playback, with no error.
 - Player state reads at a boundary return plausible wrong values.
 - `SetTempo` on audio does nothing and reports nothing.
 - A gapless advance produces no `onPlayBackEnded`.
+- A queued `plugin://` track reports its plugin URL as the playing file, so a
+  match on the resolved stream misses every track after the first.
 
 ## Open questions
 

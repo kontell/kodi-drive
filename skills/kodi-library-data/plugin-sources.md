@@ -156,6 +156,19 @@ plugin source that means listing each bound show folder to compare its hash:
 library-updated event the home widgets listen for only when few paths are
 bound.
 
+When the event is all that is wanted, scan a directory that does not exist.
+`VideoLibrary.Scan` with `"directory": "special://temp/no-such-directory/"`
+announced `VideoLibrary.OnScanStarted` and `VideoLibrary.OnScanFinished` 0.1 s
+apart and listed nothing (observed on 22.0b2).
+
+A clean asked for while any scan runs is refused, and the caller is not told:
+`VideoLibrary.Clean` answered `OK` and Kodi logged `CleanLibrary is not
+possible while scanning or cleaning`
+(`xbmc/interfaces/builtins/LibraryBuiltins.cpp` line 95 at `e513e0ff`; observed
+on 22.0b2 with a clean sent right after a scan with no path). Wait for
+`OnScanFinished` before cleaning, and do not start a walk of every path just
+before a clean that matters.
+
 ## An InfoTag is a pointer into its ListItem
 
 `ListItem.getVideoInfoTag()` and `getMusicInfoTag()` return a wrapper around
@@ -227,6 +240,54 @@ scan, wait for `OnScanFinished` (or for `Library.IsScanningVideo` /
 `Library.IsScanningMusic` to drop), then issue the next. A user's own
 "Update library" during an add-on's scan does the same to it.
 
+## A clean given a directory still tests every bound folder, and a test that never runs deletes
+
+`VideoLibrary.Clean` takes a `directory`, and Kodi turns it into the set of
+path ids beneath it. That set narrows the query for the *files* the clean
+tests (`xbmc/video/VideoDatabase.cpp` lines 10123–10130 at `e513e0ff`). The
+pass after it is not narrowed: every `path` row with content, settings or a
+hash set, anywhere in the library, is tested, a plugin path through
+`CPluginDirectory::CheckExists`, and the row of one that does not answer is
+deleted (lines 10320–10362). An add-on that binds a folder per item gets one
+`check_exists` call per item from any clean, whatever directory it was given.
+
+A call can go unanswered with the add-on enabled and answering. Observed on
+22.0b2, on an add-on with `<reuselanguageinvoker>` on and a bound folder per
+movie: a clean asked about 1,869 folders in 3.4 s while a music scan listed a
+directory of the same add-on, and of the 1,875 plugin requests in that window
+1,874 were run. The log has the missing one as a `CScriptRunner: running
+add-on script` line, then `Reusing LanguageInvokerThread`, then the other
+request's `CScriptRunner` line and `onExecutionDone`, and no `adding args` for
+it. That folder's `path` row was deleted. Its movie was still in the `movie`
+table and gone from `movie_view`, and so from every listing: 1,788 rows in
+the table, 1,787 in the view.
+
+An add-on that owns plugin rows should not ask for a clean at all, scoped or
+not. It cannot keep the home widgets, the user or its own scans from calling
+the plugin while one runs, and each answer lost hides a row until that row
+is filed again. Remove what you own through the calls that name it
+(`VideoLibrary.Remove*`, or `SetSourceContent` with `clearmode: "remove"`).
+
+## Refreshing a show keeps its rows only without `refreshepisodes`
+
+A refresh removes "any existing data for the item" and scans it again: a movie
+through `DeleteMovie`, an episode through `DeleteEpisode`, a season through
+`DeleteSeason`, and a show through `DeleteTvShow` **only when the job was asked
+to refresh everything** (`xbmc/video/jobs/VideoLibraryRefreshingJob.cpp` lines
+455–473 at `e513e0ff`; `VideoLibrary.RefreshTVShow` passes its
+`refreshepisodes` as that flag, `xbmc/interfaces/json-rpc/VideoLibrary.cpp`
+lines 902–904). So `refreshepisodes: true` deletes the show with its seasons
+and episodes and imports them again under new ids, and anything keyed on the
+old ids is orphaned. With `refreshepisodes: false` the scanner takes its
+`refreshShowInfoOnly` branch and rewrites the show's row where it is
+(`xbmc/video/VideoInfoScanner.cpp` lines 1060–1100): on 22.0b2 a show
+refreshed that way kept its `tvshowid`, and its five episodes kept their ids
+and their play counts (observed, on a plugin source bound to
+`metadata.local`).
+
+Use the show-only form when what changed is the show's own data, such as its
+cast, which no setter takes.
+
 ## A played song with no date is "played now"; an album is "added" when last scanned
 
 `CMusicDatabase::UpdateSong` (xbmc/music/MusicDatabase.cpp) writes
@@ -236,6 +297,18 @@ song's existing date when the call carries none. A client that sets
 `playcount` for an item its server marks played without a date therefore
 stamps the moment of the call: sixteen such songs topped a tablet's
 recently played albums on the day of its import (22.0b2). Send a date.
+
+The same lines mean a song's `lastplayed` cannot be cleared through the API.
+An empty string fails `CDateTime::SetFromDBDateTime`, which wants nineteen
+characters, so the song keeps the date `SetSongDetails` loaded it with
+(`xbmc/interfaces/json-rpc/AudioLibrary.cpp` lines 985–986 at `e513e0ff`), and
+`UpdateSong` writes a valid date back whatever the play count
+(`xbmc/music/MusicDatabase.cpp` lines 1401–1408); only a song that never had
+a date reaches the branch that writes `NULL`. Observed on 22.0b2: a song with
+play count 10, sent `{"playcount": 0, "lastplayed": ""}`, read back play count
+0 with its date unchanged. A client that compares what it wants with a
+readback must hold no opinion on the date of an unplayed song, or it sends
+the same call on every pass.
 
 `GetRecentlyAddedAlbums` orders by `album.dateAdded`, which the scanner sets
 to the newest `song.dateAdded` of the album (`UPDATE album SET dateAdded`

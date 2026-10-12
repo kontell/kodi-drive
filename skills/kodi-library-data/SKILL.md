@@ -192,6 +192,7 @@ The scanner-side facts live in [plugin-sources.md](plugin-sources.md), one secti
 - A plugin folder listed in a movies directory becomes a phantom disc
 - A scan requested while one is running stops it
 - Refreshing a show keeps its rows only without `refreshepisodes`
+- A clean given a directory still tests every bound folder
 - A stopped music scan leaves a directory hash without its songs
 - A plugin as a music source: one directory at a time
 
@@ -257,6 +258,8 @@ Only touch a profile that is not currently open.
   only a readback shows it.
 - `VideoLibrary.Clean` sent while a scan runs answers `OK` and cleans nothing;
   one error line in the log says so ([plugin-sources.md](plugin-sources.md)).
+- A clean whose `check_exists` call for a folder is never run hides that
+  folder's row from every listing, with nothing logged about the row.
 - `RefreshTVShow` with `refreshepisodes: true` answers `OK` and hands back a
   show whose every id is new ([plugin-sources.md](plugin-sources.md)).
 - A `.db` copied without its `-wal` reads as a complete but older database.

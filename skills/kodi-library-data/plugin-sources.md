@@ -240,6 +240,34 @@ scan, wait for `OnScanFinished` (or for `Library.IsScanningVideo` /
 `Library.IsScanningMusic` to drop), then issue the next. A user's own
 "Update library" during an add-on's scan does the same to it.
 
+## A clean given a directory still tests every bound folder, and a test that never runs deletes
+
+`VideoLibrary.Clean` takes a `directory`, and Kodi turns it into the set of
+path ids beneath it. That set narrows the query for the *files* the clean
+tests (`xbmc/video/VideoDatabase.cpp` lines 10123–10130 at `e513e0ff`). The
+pass after it is not narrowed: every `path` row with content, settings or a
+hash set, anywhere in the library, is tested, a plugin path through
+`CPluginDirectory::CheckExists`, and the row of one that does not answer is
+deleted (lines 10320–10362). An add-on that binds a folder per item gets one
+`check_exists` call per item from any clean, whatever directory it was given.
+
+A call can go unanswered with the add-on enabled and answering. Observed on
+22.0b2, on an add-on with `<reuselanguageinvoker>` on and a bound folder per
+movie: a clean asked about 1,869 folders in 3.4 s while a music scan listed a
+directory of the same add-on, and of the 1,875 plugin requests in that window
+1,874 were run. The log has the missing one as a `CScriptRunner: running
+add-on script` line, then `Reusing LanguageInvokerThread`, then the other
+request's `CScriptRunner` line and `onExecutionDone`, and no `adding args` for
+it. That folder's `path` row was deleted. Its movie was still in the `movie`
+table and gone from `movie_view`, and so from every listing: 1,788 rows in
+the table, 1,787 in the view.
+
+An add-on that owns plugin rows should not ask for a clean at all, scoped or
+not. It cannot keep the home widgets, the user or its own scans from calling
+the plugin while one runs, and each answer lost hides a row until that row
+is filed again. Remove what you own through the calls that name it
+(`VideoLibrary.Remove*`, or `SetSourceContent` with `clearmode: "remove"`).
+
 ## Refreshing a show keeps its rows only without `refreshepisodes`
 
 A refresh removes "any existing data for the item" and scans it again: a movie

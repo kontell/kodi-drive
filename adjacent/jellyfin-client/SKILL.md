@@ -10,9 +10,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: adjacent
-  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers, 22.0b2 Piers"
   verified-platform: "Linux x86_64, Android TV, Android phone/tablet"
-  verified-date: "2026-08-27"
+  verified-date: "2026-10-12"
   verified-method: "observed"
 ---
 
@@ -95,6 +95,30 @@ exists (`POST /Collections`), shifting the order of everything after it.
 only sizes it.
 
 Reading `PlayCount` first re-watched 103 of 1771 movies in dynamic listings.
+
+## A play is counted when it starts, and a short item is played at any stop
+
+`OnPlaybackStart` increments `PlayCount` and stamps `LastPlayedDate`, and it
+marks the item `Played` there and then when the item supports the played flag
+but not a resume position, which is a song
+(`Emby.Server.Implementations/Session/SessionManager.cs` lines 841–853 at
+v12.0-rc6; `Audio.SupportsPlayedStatus` is true and
+`BaseItem.SupportsPositionTicksResume` defaults to false). Observed on
+12.2.0: an unplayed song stopped three seconds in read back `Played: true`,
+`PlayCount: 1`. A client that counts a play only at the end of a track
+disagrees with the server by design; send the server `Played`, never a count
+of your own.
+
+At a stop, `UpdatePlayState` decides from the position reported
+(`Emby.Server.Implementations/Library/UserDataManager.cs` lines 439–512): under
+`MinResumePct` (5) the position is dropped; over `MaxResumePct` (90), or within
+a second of the end, the item is played; and **in between, an item shorter
+than `MinResumeDurationSeconds` (300) is marked played too**, with no resume
+point (defaults in `MediaBrowser.Model/Configuration/ServerConfiguration.cs`
+lines 133–145). Test media meant to hold a resume point therefore has to run
+five minutes or more. A stop reported with no position at all increments
+`PlayCount` a second time (`OnPlaybackStopped`, `SessionManager.cs` lines
+1162–1184).
 
 ## DirectPlayProfile and TranscodingProfile answer different questions
 
@@ -334,6 +358,8 @@ for the same session, so replaying a failing URL after a successful one returns
 - A re-added item inheriting stale userdata with no event of any kind.
 - `UserDataChanged` delivering another user's entire history.
 - `PlayCount` re-marking items watched after they were cleared.
+- A skipped song counted as a play, and a short clip marked played at a stop
+  in its middle, with nothing in the stop report's answer to say so.
 - An opaque 400 from a mismatched sort being read as an empty result.
 - Albums sorted by `DateCreated` presenting a rescan as recent additions.
 - `Fields=People` on a whole-library query turning a sub-second listing into a

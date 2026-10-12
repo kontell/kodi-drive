@@ -12,7 +12,7 @@ metadata:
   category: python-addon
   verified-kodi: "21.3 Omega, 22.0b2 Piers"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-10-08"
+  verified-date: "2026-10-12"
   verified-method: "sourced"
 ---
 
@@ -167,8 +167,24 @@ In settings format `version="1"`, `visible="false"` must be a **child element**,
 not an attribute. The attribute form is invalid and renders a stray `1` in the
 settings UI rather than hiding anything.
 
-**Never attach `<dependencies>` to a `list[string]` setting.** On Kodi 21 this
+**On Kodi 21, never attach `<dependencies>` to a `list[string]` setting.** It
 silently unregisters the setting the condition references — bisected live on 21.3.
+Kodi 22 does not have the fault. On 22.0b2 three `list[string]` settings each
+carrying
+
+```xml
+<dependencies>
+  <dependency type="visible">
+    <condition operator="is" setting="someToggle">false</condition>
+  </dependency>
+</dependencies>
+```
+
+left the dialog with the toggle on and came back with it off, the toggle itself
+stayed in the dialog, `xbmcaddon.Addon().getSettingBool("someToggle")` answered,
+and the log held no warning or error naming a setting (observed). An add-on
+whose floor is Kodi 22 can use the rule. One that still installs on 21 has to
+leave it out of `settings.xml`, or add it when the Kodi 22 build is packaged.
 
 ## `start="login"` is not startup
 
@@ -195,13 +211,12 @@ opens `DialogVideoInfo` for items carrying only music tags.
   answering until `UpdateLocalAddons()`.
 - An optional dependency simply not being there.
 - A parenthesised `<visible>` failing the whole expression, so the item vanishes.
-- `<dependencies>` on a `list[string]` setting unregistering the referenced setting.
+- `<dependencies>` on a `list[string]` setting unregistering the referenced
+  setting, on Kodi 21.
 - `start="login"` never firing on a single-profile install.
 
 ## Open questions
 
-- Whether the `<dependencies>` on `list[string]` behaviour is fixed in Kodi 22
-  has not been retested — it was bisected on 21.3 only.
 - The script-plus-service case — `xbmc.service` first, `xbmc.python.script`
   second — was read from source and not run. What was run is
   `xbmc.python.library` in third place on a binary add-on, on 22.0b2 only.

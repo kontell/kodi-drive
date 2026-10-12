@@ -1,6 +1,6 @@
 {
   "xbmc/xbmc:AGENTS.md": {
-    "blob_sha": "bfdc9f3f290507bd0c1dd38aff80f9099a92f1e9",
+    "blob_sha": "32abbab883b00a15861d952d60185cffaa59ad75",
     "local": "docs/upstream/xbmc-AGENTS.md",
     "upstream": "https://github.com/xbmc/xbmc/blob/master/AGENTS.md",
     "why": "Kodi's rules for AI agents contributing to the project."

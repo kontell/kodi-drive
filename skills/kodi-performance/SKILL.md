@@ -11,7 +11,7 @@ metadata:
   category: diagnosis
   verified-kodi: "22.0b2 Piers, 22.0-BETA1 Piers, 21.3 Omega"
   verified-platform: "Android TV, Linux x86_64, Linux armv7 (LibreELEC)"
-  verified-date: "2026-10-11"
+  verified-date: "2026-10-12"
   verified-method: "observed"
 ---
 
@@ -111,6 +111,24 @@ library scanned in 323 s and never slower than 60 songs a second, a listing
 took 32–40 ms from the first minute to the last, and one `LanguageInvoker`
 thread was busy: the plugin's own.
 
+**A library removal is the worst burst.** Kodi announces `VideoLibrary.OnRemove`
+for every row it deletes, also when one call removes a whole source
+(`VideoLibrary.SetSourceContent`, `clearmode: "remove"`). The queue is a
+`std::vector`, each callback taken off is an `erase`, and the thread delivering
+announcements needs the same lock to add one (`CallbackHandler.cpp` lines 32,
+38–43, 78), so a drain costs the square of what is queued.
+
+Observed on 22.0b2 on a 32-bit Android TV, several add-ons' services running,
+when one cleared a source of 4,751 rows with that call. Ten seconds in, every
+Python thread in Kodi stopped, in every add-on; the main thread, a binary PVR
+add-on and key handling carried on. A `waitForAbort(3)` on the clearing thread
+returned after 47 s. A plugin invocation created to resolve the next music
+track reached its add-on's code 2 min 45 s later, behind a busy dialog, and
+the track failed to open. A service working through 5,632 requests without waiting on its
+Monitor fell from 55 a second to about one, and was still there three minutes
+after the clear ended. At quit, four add-ons' services outlasted Kodi's five
+seconds and were killed. A clear that size on an x86_64 desktop took 11 s.
+
 - Make a Monitor on the thread that will wait on it, for the wait:
   `xbmc.Monitor().waitForAbort(n)` is a complete reconnect delay.
 - A thread that keeps one while it works has to take its callbacks off:
@@ -120,6 +138,9 @@ thread was busy: the plugin's own.
 - Your own writes do it to you: a burst of JSON-RPC setters from a thread
   that does not wait in between queues a callback per setter on that
   thread's Monitor.
+- A service's long loop waits on its Monitor too, whatever the loop is doing.
+  It is the add-on that is not waiting whose callbacks every other add-on
+  walks past, and under the starvation that follows its loop only gets longer.
 
 ## Specific costs worth knowing
 

@@ -8,8 +8,10 @@ description: >
   receives from the server side, why Kodi's SMB reads cap out far below the
   link's capacity over Wi-Fi, the one setting that fixed it with the before and
   after numbers, the Wi-Fi power-save signature behind the slow round trips,
-  and the refresh-rate whitelist miss that adds a once-a-second judder on sets
-  that only expose 48, 50 and 60 Hz.
+  what HTTP direct play does instead of SMB, and the refresh-rate whitelist
+  miss that adds a twice-a-second judder on sets that only expose 48, 50 and
+  60 Hz — with the GUI-mode fallback that puts films on 48 Hz without an
+  override.
 license: CC-BY-SA-4.0
 metadata:
   category: diagnosis
@@ -195,6 +197,27 @@ point holds the next response until it wakes. The 1 MB chunk does not remove
 the holes; it makes each one cost a megabyte of progress instead of 128 KB,
 which is enough.
 
+## HTTP instead of SMB: one stream, no round trips
+
+The same file played again through its media server's direct-play URL
+(`/Videos/<id>/stream.mkv?static=true`, served by the same machine from the
+same disk, no transcode) goes through `CCurlFile`, which reports no chunk size
+of its own (`source chunk size is 0, setting cache chunk size to 131072`) and
+keeps one TCP stream open that the server fills as fast as the cache drains.
+Same box, same Wi-Fi, 19 minutes:
+
+| | SMB, 128 KB | SMB, 1 MB | HTTP direct play |
+|---|---|---|---|
+| `SetCaching - caching state 1` | 12 in 32 min | 0 in 10 min | 0 in 19 min |
+| demux lead | ~80 MB, shrinking | 107–159 MB | 156–159 MB, flat |
+| `Player.CacheLevel` | 0 % | 2–98 % | 84–99 % |
+| ping to the box, p50 / p99 | 3.6 ms / 1177 ms | 44 ms / 1217 ms | 9.5 ms / 127 ms |
+
+On the server the stream socket showed `rwnd_limited` 87 % of its busy time
+with `delivery_rate` 161 Mb/s: the TV's receive window, not the link, was
+pacing it, which is what a full cache looks like from the other end. Where a
+server can serve the file over HTTP, that is the transport to pick on Wi-Fi.
+
 ## The other stutter: a refresh rate the whitelist never matches
 
 The same box logs its panel modes at every display change:
@@ -220,9 +243,26 @@ Display resolution ADJUST : 3840x2160 @ 50.000000 - Full Screen (18) (weight: 0.
 `No resolution matched` (`Resolution.cpp:305`) is debug level and the fallback
 is the GUI mode, so a 50 Hz panel plays 24p content in a 2:2:2:2:3 cadence.
 With `avtiming` logging on, `CRenderManager::PrepareNextRender` shows its
-`diff` walking from -1.9 ms to -21.9 ms over 24 frames and then one frame held
-for a third vsync — about once a second. Only 24.000 fps content would ever
-reach 48 Hz.
+`diff` walking from -1.9 ms to -21.9 ms over about 12 frames and then one
+frame held for a third vsync: 218 of 2,528 frames in a five-minute window,
+twice a second. Only 24.000 fps content would ever reach 48 Hz by matching.
+
+**What matches nothing inherits the GUI mode.** `ChooseBestResolution` starts
+from the current video resolution (`Resolution.cpp:59`) and a whitelist miss
+leaves it untouched, so setting Kodi's own display mode (Settings › System ›
+Display) to 48 Hz puts every 23.976 film on 48 Hz with no override at all.
+Observed after exactly that change:
+
+```
+[WHITELIST] Searching the whitelist for: width: 3840, height: 2160, fps: 23.976, 3D: false
+[WHITELIST] No resolution matched
+Display resolution ADJUST : 3840x2160 @ 48.000004 - Full Screen (19) (weight: 0.000)
+```
+
+It is a fallback, not a match, so it carries 29.97 and 59.94 fps material to
+48 Hz as well, while 25/50 fps still switches to 50 Hz and 30/60 fps to 60 Hz
+through the whitelist. 48.000004 Hz against 23.976 fps leaves a 0.1 %
+difference, which with audio as the clock is one frame repeated every ~42 s.
 
 `advancedsettings.xml` overrides are consulted before the whitelist
 (`Resolution.cpp:62`) and match a refresh range against an fps range
@@ -241,8 +281,8 @@ reach 48 Hz.
 </advancedsettings>
 ```
 
-That is `sourced`; whether 48 Hz then plays cleanly on such a panel is under
-Open questions.
+That is `sourced`; whether an override behaves any differently from the GUI
+fallback above is under Open questions.
 
 ## What fails silently
 
@@ -254,7 +294,12 @@ Open questions.
 - `filecache.chunksize` has no effect on SMB; the source's chunk wins.
 - `smb.chunksize` changes nothing for the file already playing.
 - The whitelist's fallback to the GUI refresh rate is logged at debug level
-  only, with no notification.
+  only, with no notification — and it applies to every unmatched rate, so a
+  GUI parked on 48 Hz for films also receives 29.97 and 59.94 fps content.
+- A network outage is not a pause: `CCurlFile` returns a short read,
+  FFmpeg logs `[matroska,webm] File ended prematurely`, and `CVideoPlayer`
+  exits as if the file had ended, saving a resume point ~20 s after the
+  last byte arrived.
 - A debug log with `avtiming` on writes 50 lines a second; grep it on the
   workstation from an `adb exec-out "tail -c 40000000 …"` slice. An on-device
   `grep` of the full file ran for minutes on one core of the box.
@@ -272,10 +317,21 @@ Then the stall listing above against the log of the same session.
 
 ## Open questions
 
-- Whether the 48 Hz override gives a clean 2:2 cadence on a panel that exposes
-  48.000004 Hz has not been checked; `videoplayer.usedisplayasclock` with it
-  would let Kodi resample audio to the 0.1 % rate difference instead of
-  dropping a frame every ~41 s, and that has not been tried either.
+- The GUI-at-48 Hz fallback was watched for two minutes only. Whether the
+  one-frame-per-42 s repeat is visible, and whether
+  `videoplayer.usedisplayasclock` (which makes the display the clock and
+  resamples audio by the 0.1 %) removes it, has not been checked; nor has the
+  `advancedsettings.xml` override been run at all.
+- During HTTP direct play the box's Wi-Fi data path froze while still
+  associated: bytes stopped at 13:09:38 after 5.5 minutes of continuous
+  ~78 Mb/s receive, Android logged `CMD_IP_REACHABILITY_FAILURE` 45 s later
+  and then `NETWORK_SELECTION_DISABLED_NO_INTERNET_TEMPORARY`, and nothing
+  recovered it until Wi-Fi was toggled off and on 19 minutes later (which also
+  rotates the wireless-debugging port). No deauth, beacon loss or supplicant
+  event was logged; every thermal zone read 42 °C; the access point kept
+  serving another client. One occurrence in an hour of SMB and 19 minutes of
+  HTTP, so whether sustained continuous receive provokes it is unknown — the
+  driver log would say and needs root.
 - Whether a `WifiManager.WifiLock` of `WIFI_MODE_FULL_HIGH_PERF` held by Kodi
   during network playback removes the second-long ping holes is untested; it
   is the natural Kodi-side experiment, and a cable on the box's unused

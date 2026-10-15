@@ -152,6 +152,7 @@ With add-ons ruled out, use the symptom:
 | Library empty or wrong | the databases — see [`kodi-library-data`](../kodi-library-data/SKILL.md) |
 | Home categories missing Genres/Artists/Albums on every skin | the `library://` node tree — see [`kodi-library-nodes`](../kodi-library-nodes/SKILL.md) |
 | Playback fails or plays wrong track | stream and player selection; sample `time` twice before believing it is playing |
+| Playback pauses for 15–20 s at a time on a network source while link and hardware look adequate | the read rate Kodi actually gets, not the decoder — see [`kodi-playback-stalls`](../kodi-playback-stalls/SKILL.md) |
 | Artwork missing or slow | the texture cache |
 | Skin renders wrong or partially | a dropped include — Kodi logs a parse error and renders without it |
 | Crash with no message | the crashlog, not kodi.log |

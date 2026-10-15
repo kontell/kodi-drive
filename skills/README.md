@@ -43,6 +43,7 @@ See [`../README.md`](../README.md) for how to install and use these, and
 - [`kodi-known-defects`](kodi-known-defects/SKILL.md) — Kodi and inputstream.adaptive defects confirmed by investigation, with their symptoms, upstream status, and how to recognise each from a log.
 - [`kodi-logs`](kodi-logs/SKILL.md) — Read kodi.log usefully — turn on debug logging without the on-screen overlay, find the log on any platform, grep for the right severity, and read a crashlog.
 - [`kodi-performance`](kodi-performance/SKILL.md) — Make a Kodi add-on fast on the hardware people actually run it on.
+- [`kodi-playback-stalls`](kodi-playback-stalls/SKILL.md) — Diagnose playback that pauses for seconds at a time on a network source — a 4K remux that "glitches" on an Android TV box while the link speed and the hardware look more than adequate.
 - [`kodi-process-control`](kodi-process-control/SKILL.md) — Stop, restart, and measure a Kodi process without killing your own shell or measuring the wrong one.
 - [`kodi-profiles`](kodi-profiles/SKILL.md) — Switch Kodi profiles from a script, and enable add-ons in the profile you actually meant.
 

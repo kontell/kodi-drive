@@ -9,9 +9,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: playback
-  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers, 23.0-ALPHA1 (master c7c26084f8)"
   verified-platform: "Linux x86_64, Android TV, Android phone/tablet"
-  verified-date: "2026-08-23"
+  verified-date: "2026-10-18"
   verified-method: "observed"
 ---
 
@@ -77,6 +77,61 @@ that is ffmpegdirect's catchup mode, and it is the only pipeline for it.
 A related trap worth knowing: a **raw static file** (`?static=true` and similar)
 is not seekable through ffmpegdirect, Kodi's default inputstream, or VLC. A
 remuxed HLS stream with real segment indices is. If seeking matters, remux.
+
+## Realtime is the add-on's answer, and it defaults to yes
+
+VideoPlayer treats a stream as live ("realtime") when its input stream says so,
+and an inputstream add-on says so unless it overrides the call.
+`kodi::addon::CInstanceInputStream::IsRealTimeStream()` returns `true`
+(`xbmc/addons/kodi-dev-kit/include/kodi/addon-instance/Inputstream.h:1370` at
+master `c7c26084f8`), and Kodi asks the add-on whenever it provides the
+callback (`xbmc/cores/VideoPlayer/DVDInputStreams/InputStreamAddon.cpp:667-670`).
+
+| Source | Realtime when |
+|---|---|
+| Kodi's own input streams | the item's `isrealtimestream` property is true; default false (`DVDInputStream.cpp:33`) |
+| A PVR client that demuxes | the client's `IsRealTimeStream` says so (`InputStreamPVRChannel.cpp:99-102`) |
+| ffmpegdirect 22.2.7, `stream_mode=timeshift` | always (`src/stream/TimeshiftStream.cpp:136-139`) |
+| ffmpegdirect, default mode | `inputstream.ffmpegdirect.is_realtime_stream=true` **and** the format reports no duration (`src/stream/FFmpegStream.cpp:621-627`) |
+| ffmpegdirect, catchup | as default mode, unless its `forceRealtimeOffCatchup` setting is on (`src/stream/FFmpegCatchupStream.cpp:373-379`) |
+| inputstream.adaptive (`Piers` at `e7418d4`) | the session is live (`src/main.cpp:504-507`) |
+| Any add-on that does not override it | always |
+
+Realtime switches several things at once (VideoPlayer at master `c7c26084f8`):
+
+- **No tempo** (`VideoPlayer.cpp:5865`), see
+  [`kodi-playback-tempo`](../kodi-playback-tempo/SKILL.md).
+- **No passthrough**: the audio is decoded (`VideoPlayerAudio.cpp:85-87` and
+  `:661-663`).
+- **The audio is resampled to the clock** (`VideoPlayerAudio.cpp:140-142`), and
+  the clock runs 5 % slow while the audio queue is under 5 % full, until it is
+  over 10 % again (`VideoPlayer.cpp:2281-2295`).
+- **A stall buffers until the audio queue is over 10 %**, and the video queue
+  too unless the caching timer runs out first (`VideoPlayer.cpp:2187-2192`).
+
+A live HLS played through ffmpegdirect with `stream_mode=timeshift` logged both
+within a second of starting, at normal speed, on a build of master `c7c26084f8`
+carrying unmerged tempo patches:
+`CVideoPlayerAudio:: synctype set to 1: resample` and
+`CDVDClock::SetSpeedAdjust - adjusted:-0.050000`.
+
+So an inputstream add-on that never overrides `IsRealTimeStream()` turns off
+passthrough and tempo for everything it plays, VOD included.
+
+### ffmpegdirect's timeshift end is wall-clock time since the tune
+
+In timeshift mode ffmpegdirect reports the end of its buffer as the time since
+the stream was opened, not as what it has received:
+`SetPtsEnd(m_timeshiftBuffer.GetMillisecondsSinceStart() * 1000)`
+(`src/stream/TimeshiftStream.cpp:131`), which is `high_resolution_clock::now()`
+minus the start point (`src/stream/TimeshiftBuffer.h:58-62`).
+
+With its source process stopped for 20 s, a stream played from a `.strm` on that
+build kept reporting a growing `totaltime` while `time` stood still — 176.86,
+180.71, 184.75 s against 169.61 s. The gap between `time` and `totaltime` is how long
+ago the stream was tuned minus the position, not how far behind live it is.
+On a PVR channel JSON-RPC reports neither; see
+[`kodi-jsonrpc`](../kodi-jsonrpc/SKILL.md).
 
 ## Two clocks: output rate and content rate
 
@@ -226,6 +281,10 @@ Set before `avformat_find_stream_info()`.
 - Emit-time `ptsStart` drifts and the OSD time explodes without erroring.
 - A lost `EAGAIN` packet produces silence only for small-frame codecs.
 - Cover art initialises the video pipeline and then wedges the audio thread.
+- An inputstream that never overrides `IsRealTimeStream()` is live to Kodi: no
+  passthrough and no tempo, with nothing logged.
+- ffmpegdirect's timeshift end keeps advancing while its source delivers
+  nothing.
 
 ## Open questions
 

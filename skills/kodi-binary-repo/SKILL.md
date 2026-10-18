@@ -12,7 +12,7 @@ metadata:
   category: shipping
   verified-kodi: "22.0rc1 Piers"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-10-08"
+  verified-date: "2026-10-18"
   verified-method: "sourced"
 ---
 
@@ -54,7 +54,8 @@ An add-on's `Jenkinsfile` is one line, `buildPlugin(version: "Piers")`. That
 function is
 [`vars/buildPlugin.groovy`](https://github.com/xbmc/pipeline-library/blob/master/vars/buildPlugin.groovy)
 in `xbmc/pipeline-library`; the line numbers below are at commit `902a3be`
-(2025-12-27).
+(2025-12-27), and the file is unchanged at `081d22d` (2026-05-28), the head on
+2026-10-18.
 
 | Platform | Built | Deployed |
 |---|---|---|
@@ -111,6 +112,22 @@ At `902a3be` the last key is `Piers`, so a Piers add-on is compiled against
 `addon.xml` come from whichever headers were compiled against — see
 [`kodi-versions-abi`](../kodi-versions-abi/SKILL.md).
 
+### A version it does not know builds for Matrix
+
+```groovy
+def version = addonParams.containsKey('version') && addonParams.version in VERSIONS_VALID ? addonParams.version : VERSIONS_VALID.keySet()[0]   // line 19
+```
+
+A `version:` that is not a key of `VERSIONS_VALID` — a misspelling, `"master"`,
+or the next Kodi's codename before the map gains it — falls back to the
+**first** key, `Matrix`, with no error. The add-on is then compiled against
+xbmc's `Matrix` branch (line 109) and deployed to the `matrix` folder
+(`versionFolder = VERSIONS_VALID[version]`, line 205): built for Kodi 19.
+
+On 2026-10-18 the map still ends at `Piers` and has no key for Kodi 23. An
+add-on branch for Kodi 23 therefore keeps `buildPlugin(version: "Piers")`,
+which is already the value compiled against `master`.
+
 ## Acceptance is at Team Kodi's discretion
 
 Observed in the repository's pull requests in October 2026. The most recent new
@@ -128,6 +145,8 @@ wanted.
 - A platform your CI never compiled fails for the first time on their builder.
 - A `platforms.txt` exclusion does not stop the per-add-on build from compiling
   that platform.
+- A `Jenkinsfile` naming a version the builder does not know builds and deploys
+  for Matrix.
 
 ## Open questions
 

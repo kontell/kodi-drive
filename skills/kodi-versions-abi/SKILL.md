@@ -10,9 +10,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: shipping
-  verified-kodi: "21.3 Omega, 22.0b1 Piers, 22.0rc1 Piers"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers, 22.0rc1 Piers, 23.0-ALPHA1 (master c7c26084f8 and fe8292d)"
   verified-platform: "Linux x86_64, Android"
-  verified-date: "2026-10-08"
+  verified-date: "2026-10-18"
   verified-method: "observed"
 ---
 
@@ -36,6 +36,7 @@ That single rule explains most "why will this not install" questions.
 | 20 | Nexus | |
 | 21 | Omega | |
 | 22 | Piers | |
+| 23 | none yet | `master`'s `version.txt` reads 23.0 ALPHA1, `ADDON_API` 22.90.701; no 23.x tag on 2026-10-18 |
 
 ## Your declared version comes from the headers you built against
 
@@ -55,6 +56,7 @@ Observed for the PVR instance type:
 |---|---|---|---|
 | 21 Omega | 8.3.0 | 8.2.0 | yes |
 | 22 beta 1, beta 2, RC1 | 9.2.0 | 9.2.0 | **none** |
+| 23.0 ALPHA1, `master` at `fe8292d` | 9.2.0 | 9.2.0 | **none** |
 
 With `MIN == current`, **the day upstream bumps to 9.3.0/MIN 9.3.0, supporting
 Beta 1 and supporting upstream's tip become mutually exclusive.** No single
@@ -109,6 +111,30 @@ Watch upstream's declared floor on a schedule — a weekly job that reads the
 current header values and fails when they move is enough. That converts a silent
 break into a notification.
 
+## Before the next Kodi has a tag, pin a commit
+
+xbmc had no 23.x tag on 2026-10-18, so a channel for Kodi 23 has nothing to pin
+but a commit on `master`. Pin the commit, not the branch, for the reason above:
+`master` is the most active ref there is.
+
+At `master` `fe8292d` (2026-10-18) a Kodi 23 build is a Kodi 22 build with a
+different version number. All seven interfaces a PVR add-on imports carry the
+same values and minimums as the head of `Piers` (`a2d4128` the same day),
+`cmake/addons` is the same git tree, and `tools/depends/configure.ac` sets the
+same Android API level (24) and Apple minimums (macOS x86_64 10.15, arm64
+11.0). The built `addon.xml` imports are identical, so only the version major
+tells the two builds apart.
+
+It holds the other way too. Kodi 22.0 beta 2's own `inputstream.ffmpegdirect`
+22.2.7 and `inputstream.adaptive` 22.3.21, copied out of the Flathub bundle and
+declaring `kodi.binary.instance.inputstream` 3.4.0, installed, enabled and
+played live HLS in a build of `master` at `c7c26084f8` (2026-10-16), whose
+window for that interface is [3.4.0, 3.4.1]. That build carried unmerged
+VideoPlayer and AudioEngine patches; none of them touches `versions.h`.
+
+That lasts until `master` raises a minimum, which the scheduled check above is
+there to catch.
+
 ## Let the major carry the Kodi version
 
 The upstream binary-add-on convention is that the add-on's **major version is the
@@ -157,6 +183,8 @@ accepted anywhere.
 - A watcher pointed at `master` goes on answering after the release branches,
   about the next Kodi.
 - A tag on the wrong branch produces a plausible release filed in the wrong place.
+- Until `master` diverges, a Kodi 23 build declares the same imports as a Kodi 22
+  build; nothing but the version major keeps them apart.
 
 ## Open questions
 

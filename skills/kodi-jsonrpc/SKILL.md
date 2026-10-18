@@ -10,9 +10,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: access
-  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers, 23.0-ALPHA1 (master c7c26084f8)"
   verified-platform: "Linux x86_64, Android TV, Android phone"
-  verified-date: "2026-09-01"
+  verified-date: "2026-10-18"
   verified-method: "observed"
 ---
 
@@ -79,7 +79,7 @@ kodi-remote get Player.GetProperties '{"playerid":1,"properties":["time","totalt
 `options.resume` works for library ids. Seeks land keyframe-snapped a second or
 two off the target — assert with tolerance.
 
-## Three readings that agree with whatever you hoped
+## Readings that agree with whatever you hoped
 
 **Infolabels go stale, they do not go empty.** `XBMC.GetInfoLabels` on
 `MusicPlayer.*` / `VideoPlayer.*` keeps returning the *previous* item's values
@@ -101,6 +101,22 @@ The only signal separating a running playback from a wedged one is **`time`
 sampled twice**. A single reading agrees with whatever you hoped. This is cheap
 to fold into any playback assertion and is the difference between ruling an
 approach out and shipping it.
+
+**On a live TV channel, `time` is the EPG programme's, not the player's.** For a
+TV or radio channel `Player.GetProperties` does not ask the player at all:
+`time` is the programme's `Progress()` (`PlayerOperations.cpp:1726-1732` at
+master `c7c26084f8`), which is the current UTC time minus the programme's start,
+in whole seconds (`xbmc/pvr/epg/EpgInfoTag.cpp:271-281`). `totaltime` is the
+programme's duration (`PlayerOperations.cpp:1808-1813`) and `percentage` its
+progress (`:1754-1760`). The same branch is in 21.3 Omega and 22.0 beta 2.
+
+So it advances through a pause, a stall or a timeshift, and a tempo does not
+change its rate. Through a PVR add-on on a build of master `c7c26084f8` (with
+unmerged tempo patches that do not touch this branch), `time`
+read in whole seconds, moved 34 s across a 30 s pause and the 3 s after it, and
+had a slope of 0.989 against the wall clock over 15 s at tempo 1.5. Sampling
+`time` twice proves nothing on a live channel; it moves while the player is
+wedged.
 
 **An end-to-end duration is a single reading too.** It tells you *that* thirty
 seconds went somewhere, and every plausible story fits it equally well. Find an
@@ -210,6 +226,8 @@ For playback-first restoration at a saved position, append the songs after the p
 - Infolabels return the previous item rather than nothing.
 - `speed: 1` reports a wedged player as a healthy one.
 - A single `time` reading, or a single end-to-end duration, confirms any theory.
+- On a live TV channel `time` is wall-clock time into the EPG programme, and moves
+  whatever the player does.
 - `Settings.SetSettingValue` returns `true` rather than an object, and persists
   nothing; a crash later keeps whatever Kodi last saved.
 - A request with no `id` runs `SetVolume` and drops `NotifyAll`, returning the

@@ -10,9 +10,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: diagnosis
-  verified-kodi: "21.3 Omega, 22 Piers"
-  verified-platform: "Linux x86_64"
-  verified-date: "2026-08-31"
+  verified-kodi: "21.3 Omega, 22 Piers, 22.0rc1 Piers"
+  verified-platform: "Linux x86_64, Linux Flatpak"
+  verified-date: "2026-10-19"
   verified-method: "observed"
 ---
 
@@ -112,8 +112,45 @@ Only touch a profile Kodi does not currently have open, and copy the `-wal` and
 `-shm` files alongside the `.db` if you are snapshotting rather than editing —
 reading the `.db` alone gives a stale view.
 
+## A headless start opens `<lastloaded>`, and add-on settings live under it
+
+`userdata/profiles.xml` carries `<lastloaded>N</lastloaded>`, the index of the
+profile Kodi had open when it last saved the file. With
+`<useloginscreen>false</useloginscreen>` and `<autologin>-1</autologin>`, a Kodi
+started from a shell or a systemd unit opens that profile, not the master one.
+
+Observed on 22.0rc1 (Flatpak, Linux x86_64). With `<lastloaded>1</lastloaded>`
+the start logged
+
+```
+info <general>: special://profile/ is mapped to: special://masterprofile/profiles/<NAME>/
+```
+
+and after the file was edited to `<lastloaded>0</lastloaded>` while Kodi was
+stopped, the next start logged `special://profile/ is mapped to:
+special://masterprofile/`. Sourced: `CProfileManager::Load` reads the element
+into `m_lastUsedProfile` and `Save` writes the open profile back into it
+(`xbmc/profiles/ProfileManager.cpp:152` and `:233` at `22.0b2-Piers`).
+
+An add-on's `addon_data/<id>/settings.xml` resolves under `special://profile/`
+(`xbmc/addons/addoninfo/AddonInfoBuilder.cpp:399` at `22.0b2-Piers`), so the
+profile decides which settings file an add-on reads, not only which add-ons are
+enabled. The observed shape of getting this wrong: a PVR add-on configured in
+the master profile, started under the other profile, read every setting as its
+default — a `RunScript` probe calling
+`xbmcaddon.Addon('<id>').getSetting('<server address id>')` returned `''` while
+the master profile's file held the address — and sat at connection state
+CONNECTING with nothing in the log. The mapping line above is the first thing to
+read when an add-on "lost its settings" across a restart.
+
+`Addons33.db` is also the filename on 22.0rc1: `userdata/Database/` for the
+master profile, `userdata/profiles/<name>/Database/` for the others.
+
 ## What fails silently
 
+- A restart opens `<lastloaded>`, which is whichever profile was open last;
+  an add-on configured in another profile then reads defaults and reports
+  nothing.
 - `LoadProfile` returns `"OK"` for a switch that never happens.
 - A modal blocks the switch with no error surfaced to the caller.
 - `SetAddonEnabled` succeeds against the wrong profile and reports success.
@@ -125,8 +162,6 @@ reading the `.db` alone gives a stale view.
 - Whether `LoadProfile` wedges identically when the blocking add-on is a
   *service* versus a *plugin* has not been isolated — the observed cases were
   services that would not stop.
-- The `Addons33` schema number is Kodi-21-specific. Kodi 22 may renumber it;
-  check the actual filename before assuming the path.
 - Whether Kodi caches any part of a non-active profile's add-on state in memory,
   which would make a direct `Addons33.db` edit take effect late or not at all,
   has not been tested.

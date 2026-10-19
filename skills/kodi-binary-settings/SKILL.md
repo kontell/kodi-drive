@@ -9,9 +9,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: binary-addon
-  verified-kodi: "21.3 Omega, 22.0b2 Piers"
-  verified-platform: "Linux x86_64"
-  verified-date: "2026-10-08"
+  verified-kodi: "21.3 Omega, 22.0b2 Piers, 22.0rc1 Piers"
+  verified-platform: "Linux x86_64, Linux Flatpak"
+  verified-date: "2026-10-19"
   verified-method: "sourced"
 ---
 
@@ -212,6 +212,33 @@ in the add-on. The lines come from Kodi's side of the transfer, before the
 add-on's callback runs.
 
 Labels are string ids from `resources/language/resource.language.en_gb/strings.po`.
+
+### Dropping an option: Kodi discards the stored value and warns
+
+A profile that stored an option the add-on no longer offers does not break the
+add-on or its dialog. Observed on 22.0rc1 after an `integer` setting lost its
+option `3`. The user's `settings.xml` under `addon_data/<id>/` still held
+`<setting id="inputStream">3</setting>`, and the start logged one line:
+
+```
+warning <CAddonSettings[0@<addon id>]>: failed to load value "3" for setting inputStream
+```
+
+No error followed and the add-on came up. Seven minutes later, before any
+settings dialog had been opened, the file on disk read
+`<setting id="inputStream" default="true">0</setting>`; the dialog, opened after
+that, showed the first option.
+
+Sourced: `CAddonSettings::Load` applies each stored value with
+`newSetting->FromString(value)` and warns when that returns `false`
+(`xbmc/addons/settings/AddonSettings.cpp:406` at `22.0rc1-Piers`).
+`CSettingInt::FromString` calls `SetValue`, which rejects a value that is not
+among the setting's options before touching `m_value`
+(`xbmc/settings/lib/Setting.cpp:974-981`, `:1025-1033` and `:1006-1016` at the
+same tag), so the setting keeps the default it was built with. Inferred from
+those two: by the time the add-on asks `GetSettingInt`, Kodi has already
+answered with the default, and a C++ fallback for the old value is harmless but
+never the thing that saves the day.
 
 ## What fails silently
 

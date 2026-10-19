@@ -9,9 +9,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: diagnosis
-  verified-kodi: "21.3 Omega, 22.0b2 Piers"
-  verified-platform: "Linux x86_64"
-  verified-date: "2026-10-08"
+  verified-kodi: "21.3 Omega, 22.0b2 Piers, 22.0rc1 Piers"
+  verified-platform: "Linux x86_64, Linux Flatpak"
+  verified-date: "2026-10-19"
   verified-method: "observed"
 ---
 
@@ -128,6 +128,24 @@ API — a two-line `RunScript` probe is enough:
 import xbmc, xbmcaddon
 xbmc.log("probe: 30999=%r" % xbmcaddon.Addon("<addon.id>").getLocalizedString(30999))
 ```
+
+**On a Flatpak Kodi the probe has to live under the app's data directory.**
+`RunScript(/abs/path/probe.py)` with the file somewhere in `$HOME` logs
+
+```
+error <general>: ExecuteAsync - Not executing non-existing script /home/<USER>/probe.py
+```
+
+and runs nothing: the Flathub sandbox has no view of `$HOME`. Observed on the
+flathub-beta 22.0rc1 build. `flatpak info --show-permissions tv.kodi.Kodi` lists
+`filesystems=/mnt;xdg-pictures;xdg-videos;/run/udev:ro;/run/lirc;xdg-music;/media;/run/media;...`,
+and `flatpak run --command=sh tv.kodi.Kodi -c 'test -d "$HOME/<dir>"'` fails
+while a file under `/media` is readable. `~/.var/app/tv.kodi.Kodi/data/` is the
+app's own directory and is mapped at the same path inside the sandbox, so
+`RunScript(/home/<USER>/.var/app/tv.kodi.Kodi/data/userdata/probe.py)` runs.
+Sourced for the message: `CScriptInvocationManager::ExecuteAsync` checks
+`CFile::Exists(script)` before anything else
+(`xbmc/interfaces/generic/ScriptInvocationManager.cpp:214` at `22.0b2-Piers`).
 
 ```sh
 # 30999 appended to the installed strings.po *after* Kodi started

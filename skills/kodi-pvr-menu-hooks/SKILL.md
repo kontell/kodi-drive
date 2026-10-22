@@ -95,9 +95,24 @@ PVR client's `PVR_MENUHOOK_SETTING` hooks, one button per hook
 entry under PVR settings stays). Observed on 23.0-ALPHA1, on a Linux Flatpak
 and on Android TV from the same build, with a PVR add-on whose one settings
 hook opens the add-on's own settings: the dialog gained an Actions tab holding
-that hook, and pressing it from inside the dialog did nothing. A settings hook
-whose action is to open the settings is dead weight on 23; drop it there, or
-give it an action that makes sense from inside the dialog.
+that hook.
+
+Pressing that hook from inside the dialog looks like nothing and is worse than
+nothing. `kodi::addon::OpenSettings()` runs
+`CGUIDialogAddonSettings::ShowForSingleInstance` against the dialog that is
+already open: `Open()` returns at once because the dialog is active,
+`IsConfirmed()` is false, and the add-on's settings are reloaded under the live
+dialog (`addon->ReloadSettings()`, which clears the settings manager and parses
+the definitions again). The controls on screen keep pointing at the discarded
+setting objects. Observed after the press, on the Linux build: a toggle that is
+`true` in the settings file read as off, and flipping it twice then pressing OK
+left the file untouched. On both devices a toggle that reveals dependent
+settings revealed nothing, while the same toggle in a fresh dialog revealed
+them. A user who tries the new tab first then finds every toggle dead and every
+change lost.
+
+Drop a settings hook that opens the settings on 23, and give any other settings
+hook an action that is safe to run from inside the open dialog.
 
 ## What fails silently
 

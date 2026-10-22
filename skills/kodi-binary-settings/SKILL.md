@@ -9,9 +9,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: binary-addon
-  verified-kodi: "21.3 Omega, 22.0b2 Piers"
+  verified-kodi: "21.3 Omega, 22.0b2 Piers, 22.0rc1 Piers"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-10-08"
+  verified-date: "2026-10-22"
   verified-method: "sourced"
 ---
 
@@ -211,6 +211,61 @@ So the setting keeps working and the log gains an error that reads like a fault
 in the add-on. The lines come from Kodi's side of the transfer, before the
 add-on's callback runs.
 
+### The list type is the price of the multi-select control
+
+The obvious fix is to redeclare the setting as `type="string"`, which the switch
+has a case for, and keep the `<control type="list" format="string">` with
+`<multiselect>true</multiselect>`. Kodi loads that without complaint, draws the
+same control, and the `Unknown setting type` line for that setting goes away.
+Run on 22.0rc1 against a PVR add-on with one of its three list settings
+redeclared this way, the transfer logged two lines instead of three, at load and
+again when the settings dialog closed:
+
+```
+debug <general>: Calling TransferSettings for: <Add-on name>
+error <general>: Unknown setting type of '<second list setting>' for <Add-on name>
+error <general>: Unknown setting type of '<third list setting>' for <Add-on name>
+```
+
+What it does not do is hold more than one value. Clicking the control opened the
+select dialog in multi-selection mode; ticking two entries and pressing OK closed
+the select dialog and stored nothing — the control, reopened at once, showed
+nothing ticked. Ticking one entry and pressing OK stored that one, and closing
+the settings dialog wrote it:
+
+```
+<setting id="<setting id>">hevc</setting>
+```
+
+Sourced: `CGUIControlListSetting::OnClick` collects the dialog's selected items
+and then switches on the setting's type; the `String` case returns `false` when
+more than one was selected, before anything is written
+(`xbmc/settings/windows/GUIControlSettings.cpp:772-775` at `22.0b2-Piers`). The
+`Integer` case does the same (`:766-767`). Only `SettingType::List` takes the
+whole selection (`:778-779`).
+
+A comma-joined value cannot come in from the file either. With `h264,hevc`
+stored for the string-typed setting, Kodi refused it at load and rewrote the
+file with the default at the next save:
+
+```
+warning <CSettingsManager>: unable to read value of setting "<setting id>"
+warning <CAddonSettings[0@<id>]>: failed to load value "h264,hevc" for setting <setting id>
+```
+
+Sourced: `CSettingString::CheckValidity` tests the value against the `<options>`
+whenever their labels are string ids, and `allownewoption` relaxes that only for
+options with literal labels (`xbmc/settings/lib/Setting.cpp:1498-1516`). The
+dialog cannot show such a value either: for a string setting it ticks the one
+option equal to the whole value (`GUIControlSettings.cpp:282`), so none is
+ticked.
+
+So none of the four types the transfer switch names carries a multi-select, and
+the error lines are what a multi-select list costs a binary add-on on 21 and 22.
+Read the value in `SetSetting`, which receives `ToString()` of the list;
+`GetSettingString` refuses a list with `Setting '<id>' is not a string`
+(`xbmc/addons/interfaces/AddonBase.cpp:495`).
+
 Labels are string ids from `resources/language/resource.language.en_gb/strings.po`.
 
 ## What fails silently
@@ -224,6 +279,9 @@ Labels are string ids from `resources/language/resource.language.en_gb/strings.p
   warning in the log, no script run, and a button that does nothing.
 - A `list[string]` setting works, and puts an `error` line in the log on every
   settings transfer.
+- A `string` setting behind a multi-select list control: the dialog lets the
+  user tick several, OK stores none of them, and a comma-joined value in the
+  settings file is replaced by the default.
 
 ## Open questions
 
@@ -243,6 +301,12 @@ Labels are string ids from `resources/language/resource.language.en_gb/strings.p
   `type="action"` setting therefore logs the same `Unknown setting type` line was
   not run: the add-on the list lines were seen on declares its buttons as
   `type="string"` with a button control.
+- A `string` setting behind an action button whose script runs
+  `Dialog().multiselect()` and writes the comma-joined result with `setSetting`
+  would reach the string case of the switch, and Python is not bound by the
+  dialog's one-value rule. Not built: whether that select dialog can open while
+  the settings dialog is still up without `<close>true</close>`, and whether the
+  add-on's own validity check accepts the value, were not run.
 
 ## See also
 

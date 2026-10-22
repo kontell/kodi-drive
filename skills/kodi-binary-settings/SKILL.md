@@ -160,6 +160,18 @@ is callable by any add-on or skin, and an unchecked
 - **`RunScript(<id>,…)` without the `xbmc.python.library` extension** runs
   nothing. Kodi logs `RunScript called for a non-script addon '<id>'. This
   behaviour is deprecated.` and stops there.
+- **`RunScript(<id>,…)` while the add-on is disabled** runs nothing either.
+  Kodi logs `error <general>: ExecuteAsync - Not executing non-existing script
+  <id>`: the builtin resolves its first argument with `OnlyEnabled::CHOICE_YES`
+  on every branch (`xbmc/interfaces/builtins/AddonBuiltins.cpp:243-262` at
+  `22.0b2-Piers`), while Configure stays available on a disabled add-on's info
+  dialog (`xbmc/addons/gui/GUIDialogAddonInfo.cpp:273-274`). Observed on
+  22.0rc1: the client disabled, Configure opened from the add-on browser, a
+  script button pressed, that one line and nothing else. `xbmcaddon.Addon('<id>')`
+  refuses a disabled add-on the same way (`xbmc/interfaces/legacy/Addon.cpp:69`),
+  so the path form of `RunScript` runs the file and then has no way to write
+  the setting. Every button built on this round-trip, and the picker above,
+  needs the add-on enabled; a native control does not.
 
 `RunScript` is the one that works, because a script *is* something Kodi can run.
 
@@ -363,6 +375,8 @@ Labels are string ids from `resources/language/resource.language.en_gb/strings.p
 - A `string` setting behind a multi-select list control: the dialog lets the
   user tick several, OK stores none of them, and a comma-joined value in the
   settings file is replaced by the default.
+- A script button, or the picker, pressed in the settings of a disabled add-on:
+  one `ExecuteAsync` error line in the log and nothing on screen.
 - `getSetting` in the same script run that just called `setSetting` with the
   settings dialog open: the old value, because the update is a queued GUI
   message.

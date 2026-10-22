@@ -266,6 +266,87 @@ Read the value in `SetSetting`, which receives `ToString()` of the list;
 `GetSettingString` refuses a list with `Setting '<id>' is not a string`
 (`xbmc/addons/interfaces/AddonBase.cpp:495`).
 
+### The multi-select that survives the transfer: a string behind a script button
+
+The route that keeps the picker and loses the error line is a `string` setting
+with no `<options>`, behind an action button whose script shows the multi-select
+and writes the comma-joined result:
+
+```xml
+<setting id="<setting id>" type="string" label="30xxx" help="30xxx">
+  <level>0</level>
+  <default>a,b,c</default>
+  <constraints>
+    <allowempty>true</allowempty>
+  </constraints>
+  <control type="button" format="action">
+    <data>RunScript(<id>,pick-<setting id>)</data>
+  </control>
+</setting>
+```
+
+```python
+addon = xbmcaddon.Addon('<id>')
+current = addon.getSetting('<setting id>').split(',')
+preselect = [i for i, v in enumerate(values) if v in current]
+picked = xbmcgui.Dialog().multiselect(heading, labels, preselect=preselect)
+if picked is not None:
+    addon.setSetting('<setting id>', ','.join(values[i] for i in picked))
+```
+
+No `<close>true</close>` and no reopening of settings afterwards: Kodi handles a
+script writing a setting while that add-on's settings dialog is open.
+`xbmcaddon.Addon.setSetting` first looks for an active add-on settings dialog
+for the same add-on and, finding one, posts `GUI_MSG_SETTING_UPDATED` to it
+instead of writing the file (`xbmc/interfaces/legacy/Addon.cpp:34-53` at
+`22.0b2-Piers`); the dialog calls `FromString` on its own setting
+(`xbmc/addons/gui/GUIDialogAddonSettings.cpp:71-92`). The dialog, the script's
+`Addon` object and the PVR manager all hold the one running instance, because
+`CAddonMgr::GetAddon` swaps the object it builds for the running one
+(`xbmc/addons/AddonManager.cpp:627-649`, the swap at `:644`), so there is one
+copy of the value. The button itself runs the builtin through the app
+messenger with the dialog left open (`xbmc/addons/settings/AddonSettings.cpp:179-220`).
+
+Observed on 22.0rc1, on the PVR add-on above with one list setting redeclared
+this way and the C++ untouched:
+
+- Pressing the button ran the script with the settings dialog still open
+  (`Window.IsActive(addonsettings)` read `True` inside it), and the multi-select
+  opened on top, pre-ticked from the current value.
+- Unticking two entries and pressing OK put the new value on the button's
+  value label at once; the file was untouched. Pressing the button again
+  pre-ticked the unsaved value, so `getSetting` reads the dialog's copy.
+- OK on the settings dialog wrote the file and ran the transfer with no line
+  for that setting:
+
+```
+<setting id="<setting id>">h264_10bit,hevc_rext,av1,mpeg2video,vp9,vc1</setting>
+debug <general>: Calling TransferSettings for: <Add-on name>
+error <general>: Unknown setting type of '<second list setting>' for <Add-on name>
+error <general>: Unknown setting type of '<third list setting>' for <Add-on name>
+```
+
+- Cancel on the settings dialog after a pick left the file as it was, and the
+  next press of the button pre-ticked the saved value, not the cancelled one:
+  the dialog's cancel path reloads the add-on's settings from the file
+  (`GUIDialogAddonSettings.cpp:205-209`).
+
+Two things to decide. The button shows the raw value as its second label — the
+comma-joined ids, scrolling — unless the control carries
+`<hidevalue>true</hidevalue>`. And `getSetting` straight after `setSetting`
+still returns the old value, because the dialog applies the message on the GUI
+thread; read it back on the next run of the script, not in the same one.
+
+The stored values stay as they were: a `string` with no `<options>` accepts the
+comma-joined value a `list[string]` wrote, so a setting moved this way needs no
+migration.
+
+`21.3-Omega` carries the same `UpdateSettingInActiveDialog`
+(`xbmc/interfaces/legacy/Addon.cpp:33`), the same `GUI_MSG_SETTING_UPDATED`
+handler (`xbmc/addons/gui/GUIDialogAddonSettings.cpp:60`) and the same
+running-instance swap (`xbmc/addons/AddonManager.cpp:647`); the script route
+was not run on it.
+
 Labels are string ids from `resources/language/resource.language.en_gb/strings.po`.
 
 ## What fails silently
@@ -282,6 +363,9 @@ Labels are string ids from `resources/language/resource.language.en_gb/strings.p
 - A `string` setting behind a multi-select list control: the dialog lets the
   user tick several, OK stores none of them, and a comma-joined value in the
   settings file is replaced by the default.
+- `getSetting` in the same script run that just called `setSetting` with the
+  settings dialog open: the old value, because the update is a queued GUI
+  message.
 
 ## Open questions
 
@@ -301,12 +385,6 @@ Labels are string ids from `resources/language/resource.language.en_gb/strings.p
   `type="action"` setting therefore logs the same `Unknown setting type` line was
   not run: the add-on the list lines were seen on declares its buttons as
   `type="string"` with a button control.
-- A `string` setting behind an action button whose script runs
-  `Dialog().multiselect()` and writes the comma-joined result with `setSetting`
-  would reach the string case of the switch, and Python is not bound by the
-  dialog's one-value rule. Not built: whether that select dialog can open while
-  the settings dialog is still up without `<close>true</close>`, and whether the
-  add-on's own validity check accepts the value, were not run.
 
 ## See also
 

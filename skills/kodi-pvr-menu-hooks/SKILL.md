@@ -9,9 +9,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: playback
-  verified-kodi: "21.3 Omega, 22.0b1 Piers"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers, 23.0a1"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-13"
+  verified-date: "2026-10-22"
   verified-method: "sourced"
 ---
 
@@ -85,6 +85,19 @@ and adds a moving part.
 Piers. Channel and EPG hooks are **auto-scoped to your own add-on's channels** —
 you do not receive, and cannot receive, a hook invocation for another PVR client's
 content.
+
+### On Kodi 23 a settings hook also becomes an Actions tab in the add-on's settings
+
+Kodi 23 builds a category named Actions in the add-on settings dialog from the
+PVR client's `PVR_MENUHOOK_SETTING` hooks, one button per hook
+(`CGUIDialogAddonSettings::CreateActionsCategory` in
+`xbmc/addons/gui/GUIDialogAddonSettings.cpp`, xbmc commit `aac75aa160`; the
+entry under PVR settings stays). Observed on 23.0-ALPHA1, on a Linux Flatpak
+and on Android TV from the same build, with a PVR add-on whose one settings
+hook opens the add-on's own settings: the dialog gained an Actions tab holding
+that hook, and pressing it from inside the dialog did nothing. A settings hook
+whose action is to open the settings is dead weight on 23; drop it there, or
+give it an action that makes sense from inside the dialog.
 
 ## What fails silently
 

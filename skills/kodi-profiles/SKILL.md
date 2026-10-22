@@ -110,6 +110,41 @@ there covers the database path and not this `SendMsg` one.
 Stop every poller before switching, and confirm the switch finished before
 polling again.
 
+### Same lock, second door: a switch during live TV on a timeshift buffer
+
+`PrepareLoadProfile` runs inside that `m_critical`, and `CPVRManager::Stop`
+stops playback from there (`xbmc/pvr/PVRManager.cpp:406`: `TMSG_MEDIA_STOP`,
+sent by the app thread and so handled inline). `CVideoPlayer::CloseFile` then
+joins the player thread. Observed on 22.0rc1 with a PVR channel playing through
+inputstream.ffmpegdirect's timeshift buffer, `gdb -p` as above:
+
+```
+Thread 1 "kodi.bin":   std::thread::join -> CThread::StopThread -> CVideoPlayer::CloseFile
+   -> CApplication::StopPlaying -> CApplicationMessenger::SendMsg
+   -> PVR::CPVRManager::Stop -> CProfileManager::LoadProfile
+Thread "VideoPlayer":  pthread_mutex_lock -> ffmpegdirect::TimeshiftStream::DemuxRead
+   -> CDVDDemuxClient::Read -> CVideoPlayer::ReadPacket -> CVideoPlayer::Process
+Thread "VideoPlayer":  __futex_lock_pi64 -> CProfileManager::GetUserDataFolder
+   -> CSpecialProtocol::TranslatePath -> XFILE::CFile::Exists
+   -> ADDON::Interface_Filesystem::file_exists -> ffmpegdirect::TimeshiftSegment::TimeshiftSegment
+   -> ffmpegdirect::TimeshiftBuffer::AddPacket -> ffmpegdirect::TimeshiftStream::DoReadWrite
+```
+
+The timeshift writer holds ffmpegdirect's stream mutex while it adds a packet
+(`src/stream/TimeshiftStream.cpp:98-99` at `22.2.7-Piers`), and opening a new
+segment checks `kodi::vfs::FileExists` on a path under the default
+`special://userdata/addon_data/inputstream.ffmpegdirect/timeshift`
+(`src/stream/TimeshiftSegment.cpp:35`). `special://userdata` translates through
+`CProfileManager::GetUserDataFolder` (`xbmc/filesystem/SpecialProtocol.cpp:156`),
+which blocks on the lock the app thread holds. The demux read waits for the
+stream mutex, the player thread never reaches its stop, and the join never
+returns. The log signature is the app thread's last line being
+`VideoPlayer: waiting for threads to exit`. Seen twice in a row on the same box;
+both ended with SIGKILL.
+
+So on Kodi 22, stop playback before switching profiles when a timeshifted
+channel is playing.
+
 ## `Addons.SetAddonEnabled` applies to the loaded profile
 
 There is no profile argument. The call acts on whichever profile is currently
@@ -154,10 +189,21 @@ reading the `.db` alone gives a stale view.
 - `SetAddonEnabled` succeeds against the wrong profile and reports success.
 - `JSONRPC.Ping` answers from a Kodi whose app thread is deadlocked in
   `LoadProfile`; the UI is dead and the log keeps ticking.
+- A switch while a timeshifted PVR channel plays: Kodi stops the player inside
+  the profile lock and the join never returns.
 - All three produce a plausible-looking run rather than a failure, which is why
   every one of them needs an explicit read-back.
 
 ## Open questions
+
+- After a switch on 22.0rc1 the PVR manager served the previous profile's
+  channel and group ids: a fresh start on the master profile gave one channel
+  id 66 and groups 2, 4, 5; after master -> OR -> master the same channel was
+  23 and the groups 1 to 6, which are the OR profile's database ids.
+  `PrepareLoadProfile` calls `pvrManager.Stop()` and not `Unload()`, so the
+  loaded channel groups survive the switch. Whether they are then persisted
+  into the new profile's database was not isolated; the OR profile's database
+  did hold 33 channels for a client that has no server configured there.
 
 - Whether `LoadProfile` wedges identically when the blocking add-on is a
   *service* versus a *plugin* has not been isolated — the observed cases were

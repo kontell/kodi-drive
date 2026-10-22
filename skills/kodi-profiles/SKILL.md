@@ -10,9 +10,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: diagnosis
-  verified-kodi: "21.3 Omega, 22 Piers"
+  verified-kodi: "21.3 Omega, 22 Piers, 22.0rc1 Piers"
   verified-platform: "Linux x86_64"
-  verified-date: "2026-08-31"
+  verified-date: "2026-10-22"
   verified-method: "observed"
 ---
 
@@ -75,6 +75,41 @@ Check for one before switching:
 kodi-remote get GUI.GetProperties '{"properties":["currentwindow"]}'
 ```
 
+## A JSON-RPC request in flight deadlocks the switch on Kodi 22
+
+`LoadProfile` stops the web server with `MHD_stop_daemon`, which joins every
+connection thread. A connection thread handling `XBMC.GetInfoBooleans` or
+`XBMC.GetInfoLabels` is inside `CApplicationMessenger::SendMsg`, waiting for
+the app thread, which is the thread joining it. Neither wait has a timeout.
+Observed on 22.0rc1 Piers (Linux Flatpak) with `gdb -p` from the host;
+`set sysroot /proc/<pid>/root` before `attach` finds the Flatpak's libraries:
+
+```
+Thread 1 "kodi.bin":  __pthread_clockjoin_ex -> MHD_stop_daemon -> CWebServer::Stop
+   -> CNetworkServices::StopWebserver -> CNetworkServices::Stop(bool)
+   -> CProfileManager::LoadProfile
+Thread N "MHD-connection" (ten of them):  pthread_cond_wait
+   -> CApplicationMessenger::SendMsg -> JSONRPC::CXBMCOperations::GetInfoBooleans
+   -> CJSONRPC::MethodCall -> CHTTPJsonRpcHandler::HandleRequest
+   -> CWebServer::AnswerToConnection
+```
+
+The poller was a shell loop on the box sampling `XBMC.GetInfoBooleans` every
+3 s with a 20 s client timeout. A timed-out request leaves its connection
+thread blocked all the same, so the pile grows with every poll. The log
+signature is the app thread's last line being `stopping zeroconf publishing`
+with no `CWebserver[8080]: Stopped` after it, while other threads keep
+logging. `JSONRPC.Ping` still answers, because it never touches the app
+thread, so a ping is not a liveness check for the UI; `XBMC.GetInfoLabels`
+is, and it times out. Only SIGKILL clears it (`flatpak kill tv.kodi.Kodi` on
+a Flatpak).
+
+Upstream: xbmc/xbmc#29127, a Kodi 22 regression. The lock patch proposed
+there covers the database path and not this `SendMsg` one.
+
+Stop every poller before switching, and confirm the switch finished before
+polling again.
+
 ## `Addons.SetAddonEnabled` applies to the loaded profile
 
 There is no profile argument. The call acts on whichever profile is currently
@@ -117,6 +152,8 @@ reading the `.db` alone gives a stale view.
 - `LoadProfile` returns `"OK"` for a switch that never happens.
 - A modal blocks the switch with no error surfaced to the caller.
 - `SetAddonEnabled` succeeds against the wrong profile and reports success.
+- `JSONRPC.Ping` answers from a Kodi whose app thread is deadlocked in
+  `LoadProfile`; the UI is dead and the log keeps ticking.
 - All three produce a plausible-looking run rather than a failure, which is why
   every one of them needs an explicit read-back.
 

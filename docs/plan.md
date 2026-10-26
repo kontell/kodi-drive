@@ -264,8 +264,8 @@ with a CONTRIBUTING section, a PR checkbox, and CODEOWNERS review.
   ignored under `pluginsource`, and nothing is logged either way (0.62–0.91 s → 0.17–0.25 s when right);
   **LibPath comes from the first `<extension>`**, which is what `RunScript` resolves; Kodi **does not
   install optional dependencies**; `<visible>` needs `[square brackets]` (parentheses are infolabel syntax
-  and fail the whole expression); `<visible>` cannot read a setting; `start="login"` fires on profile
-  switch, **not** startup.
+  and fail the whole expression); `<visible>` cannot read a setting; Kodi has not read a service's
+  `start` since 18.
 - ★`kodi-plugin-handles` — **every directory route must close its handle or it hangs its caller with no
   timeout**: `CScriptRunner::WaitOnScriptResult`'s first loop has no timeout at all. Before invoker reuse
   the interpreter died each time and it failed fast — which is what old fire-and-exit routes were written

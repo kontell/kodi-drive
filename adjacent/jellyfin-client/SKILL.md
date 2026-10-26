@@ -120,6 +120,24 @@ five minutes or more. A stop reported with no position at all increments
 `PlayCount` a second time (`OnPlaybackStopped`, `SessionManager.cs` lines
 1162–1184).
 
+Nothing in a playback report clears `Played` on a video; `UpdatePlayState`
+sets it false only for an item without the played flag (line 502). So **a
+watched video that is played again and stopped partway stays `Played: true`
+and gains a resume position.** Only an explicit write clears the flag:
+`DELETE /UserPlayedItems/{itemId}`, which also zeroes `PlayCount` and the
+position (`ResetPlayedState`, `MediaBrowser.Controller/Entities/BaseItem.cs`
+lines 2233–2241), or `POST /UserItems/{itemId}/UserData` carrying
+`Played: false`. This is new in 12.0: on 10.11, `OnPlaybackStart` set
+`Played = false` on every item that holds a resume position
+(`SessionManager.cs` lines 821–828 at v10.11.11), so the same re-watch read
+back unplayed. jellyfin/jellyfin#15762 removed that branch, first shipping in
+v12.0-rc1. Kodi shows the difference in the context menu, which offers
+**Mark as watched** only at a play count of 0 (`CVideoMarkWatched::IsVisible`,
+`xbmc/video/ContextMenus.cpp` line 123 at 21.3-Omega, line 125 at
+22.0b1-Piers). A client that maps `Played` to the play count therefore offers
+**Mark as unwatched** and **Reset resume position** for that item on 12.0,
+where 10.11 offered **Mark as watched**.
+
 ## DirectPlayProfile and TranscodingProfile answer different questions
 
 A `DirectPlayProfile`'s codec list says what you can play as-is. A

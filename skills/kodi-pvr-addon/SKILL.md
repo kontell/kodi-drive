@@ -9,7 +9,7 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: playback
-  verified-kodi: "21.3 Omega"
+  verified-kodi: "21.3 Omega, 22.0rc1 Piers"
   verified-platform: "Linux x86_64, Android TV"
   verified-date: "2026-08-13"
   verified-method: "observed"
@@ -80,6 +80,42 @@ channel zap — by finalising the outgoing session from `onAVStarted`.
 
 This is the same binary-API gap described in
 [`kodi-binary-settings`](../kodi-binary-settings/SKILL.md).
+
+## Telling your playback from another PVR add-on's
+
+The companion service's `xbmc.Player` callbacks fire for all playback, and
+`PVR.IsPlayingTV` is true for any client's channel: it read true while an IPTV
+Simple channel played. A zap between two clients' channels has no stop event
+either. From one add-on's channel to an IPTV Simple channel, Kodi logged
+`OnPlayBackStarted` and `OnAVStarted` with no `OnPlayBackStopped` between them
+(observed on 22.0rc1, Linux Flatpak). So a service that decides "this playback
+is mine" from a PVR condition plus a recent marker file adopts the other
+add-on's playback. After a zap away from yours, it takes the new start for a
+duplicate and keeps reporting yours.
+
+**Tag the stream instead.** Kodi copies every stream property your add-on
+returns onto the item it plays (`xbmc/pvr/PVRPlaybackState.cpp` lines 240–241
+at `22.0rc1-Piers`). That item becomes the current file item at playback start
+(`xbmc/application/ApplicationMessageHandling.cpp` line 509), and
+`xbmc.Player().getPlayingItem()` returns a copy of it
+(`xbmc/interfaces/legacy/Player.cpp` line 389). Return one more property, under
+your add-on's ID, carrying your session id, and match it from Python with
+`getPlayingItem().getProperty(...)`. An inputstream add-on receives only the
+properties it declares, prefixed with its own ID
+(`xbmc/cores/VideoPlayer/DVDInputStreams/InputStreamAddon.cpp` lines 70–74 and
+162–167), so the tag reaches nothing else. Observed on 22.0rc1: a service that
+adopts playback only on a tag match adopted its own channel, ended that session
+on the zap to IPTV Simple, and ignored IPTV Simple playback while its marker
+file was 93 seconds old.
+
+**Check for playback once at startup.** `onAVStarted` reaches only the
+`xbmc.Player` objects that exist when it fires
+(`xbmc/interfaces/python/XBPython.cpp` lines 187–194), and a login service can
+be late. With the startup action set to play TV, Kodi opened the channel
+(`VideoPlayer::OpenFile`) 310 ms before the service's `Player` existed, because
+the interpreter took 1.1 s to reach it. That run still caught `OnAVStarted`, by
+6 ms. Call `isPlaying()` and read the tag right after creating the `Player`, so
+a stream that started first is adopted rather than missed.
 
 ## Play-from-EPG changes which entry point runs
 
@@ -155,6 +191,8 @@ for nothing.
 - An add-on implementing only one recording path works with a user setting one
   way and not the other, from the same button, with no error.
 - `CloseLiveStream()` never firing leaks server-side sessions invisibly.
+- Another PVR add-on's playback passes every `PVR.IsPlaying*` check, so a
+  companion service reports it as yours.
 - `EPGPLAYBACKASLIVE` silently rerouting playback past your EPG-path handling.
 - A future timer with the same truncated title hijacking an EPG cross-reference.
 - Credentials cleared on a transient network failure, presenting as "it logged

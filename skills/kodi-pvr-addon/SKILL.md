@@ -174,7 +174,9 @@ indistinguishable.** `CURLOpen` fails for both and exposes no status code.
 So **never auto-clear stored credentials on a validation failure** — a transient
 network blip would log the user out. Only an explicit logout should clear them.
 Retry briefly on startup instead, since a just-reconnected server may not serve
-the authenticated API immediately.
+the authenticated API immediately. A brief retry inside one connect is not
+enough on its own; see
+[Re-announcing CONNECTED does nothing](#re-announcing-connected-does-nothing).
 
 ## Polling
 
@@ -185,6 +187,62 @@ restart.
 
 Skip the poll entirely while logged out, or you generate traffic and log noise
 for nothing.
+
+## Kodi reads your channels once: trigger after every reload
+
+Kodi loads a client's channels and groups when the client first connects, and
+after that only on wake or when the add-on calls `TriggerChannelUpdate()` or
+`TriggerChannelGroupsUpdate()`. A reconnect does not count.
+`CPVRManager::UpdateComponents` loads only the clients it has not loaded before
+(`xbmc/pvr/PVRManager.cpp:715-745` at `22.0b2-Piers`), and the only other
+refresh is `OnWake` (`:667-669`).
+
+So a reload the add-on does on its own (a refresh timer, a settings change, the
+reload on reconnect) changes its model and nothing on screen, until Kodi is
+restarted or woken. Observed on a Kodi 22.0 beta 2 build: after a reconnect, and
+again after a settings change, the add-on loaded one channel fewer and
+`PVR.GetChannels` went on reporting the old count.
+
+**Trigger after every load that succeeds, including the one on connect.** That
+is safe on the first connect too. Each per-client trigger job returns early for
+a client Kodi has not loaded yet (`if (!IsKnownClient(clientId)) return;`, at
+`PVRManager.cpp:965` for channels and `:985` for groups, with the same guard for
+recordings, timers and providers at `:906`, `:926` and `:945`), and Kodi loads
+the client itself once told it is connected. After a failed load there is
+nothing new to show, so skip the trigger.
+
+## Re-announcing CONNECTED does nothing
+
+Kodi drops a connection-state callback that repeats the current state
+(`xbmc/pvr/addons/PVRClient.cpp:2527` at `22.0b2-Piers`):
+
+```cpp
+if (prevState == newState)
+  return;
+```
+
+So a client already reported CONNECTED cannot make Kodi do anything by reporting
+it again. Bouncing through another state does not force a refresh either. The
+client is already known, so Kodi reloads nothing; observed through
+`SERVER_UNREACHABLE` on the same beta. A bounce through `SERVER_UNREACHABLE` or
+`DISCONNECTED` also notifies the user twice, once for that state and once for
+the `CONNECTED` after it. Kodi silences `SERVER_UNREACHABLE` and `CONNECTED`
+only when they follow `UNKNOWN` or `CONNECTING`, and never silences
+`DISCONNECTED` (`xbmc/pvr/addons/PVRClients.cpp:876-904`). Refresh through the
+triggers above.
+
+The same rule catches a connection manager that reports CONNECTED from a health
+check and only then authenticates or loads. The one in `pvr.iptvsimple`, which
+PVR clients commonly copy, calls `ConnectionEstablished()` only on a state change
+(`src/iptvsimple/ConnectionManager.cpp:92-102` on its `Piers` branch at
+`739177c`) and sets CONNECTED after every successful check (`:172`). If the work
+in `ConnectionEstablished()` fails after the check passed (a token check while
+the backend is still starting, say, or a playlist download that times out),
+nothing calls it again while the checks keep passing. Observed on a Kodi 22.0
+beta 2 build with a fork of that manager: the one connect attempt failed, none
+followed, and the client still had no channels 30 s after the backend
+recovered. Record the failure and call `ConnectionEstablished()` again at the
+next successful check.
 
 ## What fails silently
 
@@ -197,6 +255,10 @@ for nothing.
 - A future timer with the same truncated title hijacking an EPG cross-reference.
 - Credentials cleared on a transient network failure, presenting as "it logged
   me out again".
+- A reload with no trigger after it: the add-on's model changes and Kodi shows
+  the old one until it restarts or wakes.
+- A connect that fails after the health check passed, which nothing retries
+  while the check keeps passing.
 
 ## Open questions
 

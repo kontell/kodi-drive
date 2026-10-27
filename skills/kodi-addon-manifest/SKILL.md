@@ -10,7 +10,7 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: python-addon
-  verified-kodi: "21.3 Omega, 22.0b2 Piers"
+  verified-kodi: "21.3 Omega, 22.0b2 Piers, 22.0rc1 Piers"
   verified-platform: "Linux x86_64"
   verified-date: "2026-10-12"
   verified-method: "sourced"
@@ -116,6 +116,21 @@ warning. After `UpdateLocalAddons()` it ran the script.
 If your add-on genuinely needs a companion, it must be a hard `<import>`. There
 is no soft-dependency mechanism that results in the dependency being present.
 
+## `version` is the minimum, and the only attribute addon-check reads
+
+In `<import addon="X" minversion="A" version="B"/>`, Kodi takes `minversion` as
+the minimum and falls back to `version` when it is absent (`DependencyInfo`,
+`xbmc/addons/addoninfo/AddonInfo.h` line 124 at `22.0rc1-Piers`). An installed X
+passes when its version is at least that minimum **and** `version` is at least
+X's own `<backwards-compatibility abi>` (`CAddonInfo::MeetsVersion`,
+`AddonInfo.cpp` line 223). For a dependency that declares no ABI, `version="A"`
+alone does what `minversion="A"` does.
+
+addon-check reads only `version` (`kodi_addon_checker/addons/AddonDependency.py`).
+With `minversion` alone it warns `Required dependency X does not require a
+minimum version`, so write `version="A"`. The ABI imports CMake generates use
+both on purpose; see [`kodi-versions-abi`](../kodi-versions-abi/SKILL.md).
+
 ## `<visible>` conditions
 
 **Group with square brackets, not parentheses.** Parentheses are infolabel
@@ -186,11 +201,23 @@ and the log held no warning or error naming a setting (observed). An add-on
 whose floor is Kodi 22 can use the rule. One that still installs on 21 has to
 leave it out of `settings.xml`, or add it when the Kodi 22 build is packaged.
 
-## `start="login"` is not startup
+## Kodi has not read a service's `start` since 18
 
-`<extension point="xbmc.service" start="login">` fires on **profile switch**, not
-on normal Kodi startup. A service that must run from boot needs
-`start="startup"`.
+`<extension point="xbmc.service" start="...">` is ignored, whatever the value.
+Kodi 18 removed `start="startup"` (xbmc `aea6a013e6`, "no service add-ons before
+profile login"), and nothing has parsed `start` since. Every enabled service
+starts in `CServiceAddonManager::Start()` (`xbmc/addons/Service.cpp` line 55 at
+`22.0rc1-Piers`). Kodi calls that as startup completes when there is no login
+screen (`xbmc/application/Application.cpp` lines 813–814), and otherwise once a
+profile is loaded (`CProfileManager::FinalizeLoadProfile`,
+`xbmc/profiles/ProfileManager.cpp` line 436). Observed on 22.0rc1: a service
+declaring `start="login"` started during a normal start with no login screen,
+before Kodi's startup channel played.
+
+Leave the attribute out. addon-check's schema dropped it with Kodi 18
+(`gotham_service.xsd` has `start`, `leia_service.xsd` does not), so it fails
+validation: `ERROR: Schema validation failed for the following points:
+xbmc.service`.
 
 ## `<provides>` does not choose the player
 
@@ -213,7 +240,6 @@ opens `DialogVideoInfo` for items carrying only music tags.
 - A parenthesised `<visible>` failing the whole expression, so the item vanishes.
 - `<dependencies>` on a `list[string]` setting unregistering the referenced
   setting, on Kodi 21.
-- `start="login"` never firing on a single-profile install.
 
 ## Open questions
 

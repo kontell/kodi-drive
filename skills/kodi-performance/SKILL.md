@@ -9,9 +9,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: diagnosis
-  verified-kodi: "22.0b2 Piers, 22.0-BETA1 Piers, 21.3 Omega"
+  verified-kodi: "23.0-ALPHA1, 22.0-RC1 Piers, 22.0b2 Piers, 22.0-BETA1 Piers, 21.3 Omega"
   verified-platform: "Android TV, Linux x86_64, Linux armv7 (LibreELEC)"
-  verified-date: "2026-10-12"
+  verified-date: "2026-10-29"
   verified-method: "observed"
 ---
 
@@ -141,6 +141,57 @@ seconds and were killed. A clear that size on an x86_64 desktop took 11 s.
 - A service's long loop waits on its Monitor too, whatever the loop is doing.
   It is the add-on that is not waiting whose callbacks every other add-on
   walks past, and under the starvation that follows its loop only gets longer.
+
+## A large file write stalls all of Kodi through its log
+
+Kodi writes its log synchronously, on whichever thread logs. Every logger feeds
+one `dist_sink_mt`, which takes a mutex, and `flush_on(spdlog::level::debug)`
+flushes each record at debug level or above as it is written
+(`xbmc/utils/log.cpp` lines 89 and 102, the same on master `7b12e7be16` and Piers
+`d4c425ce7b`). So when a `write()` to `kodi.log` blocks on storage, every thread
+that logs waits on that mutex. With debug logging on, that is effectively the
+whole process, the app thread included.
+
+An add-on writing a large file can make storage block it. The kernel lets a
+writer fill the page cache at network speed up to its dirty limit, then holds
+every writer to the storage's speed while it drains. Observed on an Android TV
+(Kodi 23.0-ALPHA1, ARM 32-bit, debug logging on): an add-on downloading 379 MB
+at about 40 MB/s over Wi-Fi, to flash that sustains 8–11 MB/s, held about
+120 MB dirty (`Dirty` in `/proc/meminfo`). The app thread's round trip (see
+[How to measure it properly](#how-to-measure-it-properly)) reached 1.9–8.8 s
+across four runs, against 35 ms idle, and during the 8.8 s stall no thread
+logged a line for 10 s.
+
+**Write the file through yourself, a window at a time.** Call
+`os.fdatasync(fd)` every few MiB, then
+`os.posix_fadvise(fd, offset, length, os.POSIX_FADV_DONTNEED)` for that window,
+so the dirty pages never exceed one window. With 8 MiB windows the worst stall
+fell to 0.3–2.7 s over four runs. It does not fall further, because the flash
+takes about 2 s over roughly one sync in four, and every Kodi write queues
+behind that sync.
+
+**Then rest after a slow sync.** When a sync took longer than its window took
+to arrive, storage is the slower side, so sleep as long as the sync took. That
+brought the worst stall to 0.6–1.0 s over two runs, at about 15 % off the
+download's speed. The rule costs fast storage nothing:
+
+| Device | Sync vs window | Rested | 1.2 GB download |
+|---|---|---|---|
+| Linux x86_64, NVMe (22.0-RC1 Flatpak), 50 MB/s | 0.07 s vs 0.13 s | never | 21–28 s, against 24.5 s unsynced |
+| Raspberry Pi 3 (LibreELEC, 22.0b2), 2 MB/s | network is slower | never | no change |
+
+Resting as long as every sync took, slow or not, did better on the TV, but it
+cost the NVMe desktop up to 40 %: 70 ms on each of 144 windows.
+
+`sync_file_range()` does not replace `fdatasync` on Android. Called through
+`ctypes` it returned 0 and dirty pages still climbed to 110 MB. The files were
+under `Android/data`, which Android 14 serves through FUSE passthrough, so the
+cause is inferred: the range call reaches the FUSE file and not the backing
+file. `fdatasync` does reach it.
+
+Run-to-run variance is large. The unsynced download's worst stall ranged from
+0.2 s to 8.8 s on the same file, so alternate the variants and compare several
+runs of each.
 
 ## Specific costs worth knowing
 
@@ -280,6 +331,28 @@ returns (lines 610–616), so a commit's cost is the gap *before* that line.
 Group the lines by thread id first: the texture cache's worker logs into the
 same stream.
 
+To measure how long the UI thread takes to answer, time `XBMC.GetInfoLabels`
+over JSON-RPC. It is sent to the app thread with
+`SendMsg(TMSG_GUI_INFOLABEL, …)` and waits for the answer
+(`xbmc/interfaces/json-rpc/XBMCOperations.cpp` line 33). `JSONRPC.Ping` stays
+on the webserver thread, so the difference between the two is the app thread's
+share; [`kodi-profiles`](../kodi-profiles/SKILL.md) uses the same pair as a
+liveness check. `Input.ExecuteAction` measures nothing: it posts the action and returns
+at once (`InputOperations.cpp` lines 39 and 54, `waitResult` defaults to
+`false`).
+
+```sh
+curl -s -o /dev/null -w '%{time_total}\n' -u "$KODI_USER:$KODI_PASS" \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"XBMC.GetInfoLabels","params":{"labels":["System.FPS"]}}' \
+  http://localhost:<KODI_PORT>/jsonrpc
+```
+
+Run it on the device, against `localhost`. From another machine the round trip
+also carries the network queue, and a download fills exactly that queue. An
+Android TV shell has no `curl`, but it has `nc` and `$EPOCHREALTIME`, which is
+enough to send the request and time it.
+
 For process-level cost, see
 [`kodi-process-control`](../kodi-process-control/SKILL.md) — and note that
 sampling the wrong process reports a plausible ~1 MB, and Kodi's own footprint
@@ -293,6 +366,8 @@ dominates any absolute figure, so measure add-on cost as a delta.
 - Nothing errors, nothing is logged, and the feature merely feels slow.
 - A Monitor held by a blocked thread slows every add-on's threads, and nothing
   names the add-on that holds it.
+- A large file write stalls every thread that logs, and nothing names the
+  add-on that is writing.
 
 ## Open questions
 

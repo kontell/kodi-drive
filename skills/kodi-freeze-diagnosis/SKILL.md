@@ -9,9 +9,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: diagnosis
-  verified-kodi: "22.0-BETA1 Piers, 21.3 Omega"
+  verified-kodi: "23.0-ALPHA1, 22.0-BETA1 Piers, 21.3 Omega"
   verified-platform: "Android TV, Linux x86_64, Linux Flatpak"
-  verified-date: "2026-08-31"
+  verified-date: "2026-10-29"
   verified-method: "observed"
 ---
 
@@ -38,6 +38,16 @@ kodi-logtail grep '^\S+ \S+ .*(JELLYFIN|\[.*\])' | wc -l
 | Python lines stop, C++ continues | a Python-side deadlock — often the GIL |
 | C++ work stops, Python continues | a C++ hang — job system, a lock, a wait loop |
 | Both stop | the app thread, or the process is gone |
+
+**Every thread going silent at the same moment, with I/O wait high, means
+storage is blocking the log itself.** Kodi flushes each log line with a
+`write()` under one mutex, so a write that blocks stops every thread that logs.
+With debug logging on, that is everything. Check `Dirty` and `Writeback` in
+`/proc/meminfo` and the iowait column of `/proc/stat` across the gap. The usual
+source is an add-on writing a large file; the mechanism and the fix are in
+[`kodi-performance`](../kodi-performance/SKILL.md#a-large-file-write-stalls-all-of-kodi-through-its-log).
+Observed on an Android TV: 10 s with no line from any thread while 120 MB of an
+add-on's download drained to flash.
 
 An add-on whose logging is error-only proves nothing by its silence. **Anchor the
 timing on a line that fires unconditionally on a fixed cadence** — a poll loop, a
@@ -172,6 +182,8 @@ its upstream status. Recovery is a force-stop; nothing else clears it.
 
 - The log keeps ticking during a total UI freeze, because background threads are
   not job workers.
+- When storage blocks the log, the opposite holds: every thread falls silent
+  at once, and the gap is the only evidence.
 - The job manager dies with **no error line at all** — only an absence.
 - A short CPU sample can read 4x the true average and invent a runaway spin.
 - An error-only add-on log proves nothing by being quiet.

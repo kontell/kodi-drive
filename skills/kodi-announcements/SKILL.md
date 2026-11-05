@@ -5,14 +5,15 @@ description: >
   OnAdd and friends — over JSON-RPC or in an add-on's onNotification. Use when
   writing a service that watches playback or the playlist, or when a handler fires
   but sees the wrong data. Covers why querying inside a handler returns state that
-  has already changed, which events fire in which order, and the shared thread
-  that makes slow handlers everyone else's problem.
+  has already changed, which events fire in which order, the resume Kodi
+  announces before a video opened over a playing one, and the shared thread that
+  makes slow handlers everyone else's problem.
 license: CC-BY-SA-4.0
 metadata:
   category: python-addon
-  verified-kodi: "21.3 Omega, 22.0b1 Piers, 22.0b2 Piers"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers, 22.0b2 Piers, 22.0 RC1 Piers"
   verified-platform: "Linux x86_64, Android TV"
-  verified-date: "2026-10-08"
+  verified-date: "2026-11-05"
   verified-method: "observed"
 ---
 
@@ -95,6 +96,55 @@ like the cause.
 If you need to act at playback start, act in the **first line** of the handler and
 defer the rest.
 
+## A video opened over a playing one is announced as a resume first
+
+`CApplication::PlayFile` sets the speed to 1 before it opens a file while
+something is playing (`xbmc/application/Application.cpp` line 2084 at
+`22.0rc1-Piers`; `CApplicationPlayer::SetPlaySpeed` returns early when nothing
+plays, `ApplicationPlayer.cpp` line 836). `CVideoPlayer::SetSpeed` compares the
+request as an integer, `speed * DVD_PLAYSPEED_NORMAL` with that constant at
+1000, against the current speed as a float: `if (iSpeed != currentSpeed)`
+(`xbmc/cores/VideoPlayer/VideoPlayer.cpp` lines 4138 and 4148). 1000 never
+equals 1.0, so a speed of 1 raises `OnPlayBackResumed` (line 4151) on a
+VideoPlayer that was never paused. Master has the same compare
+(`VideoPlayer.cpp` line 4289 at `4575cca6213`). PAPlayer resumes only from a
+pause (`xbmc/cores/paplayer/PAPlayer.cpp` line 996 at `22.0rc1-Piers`).
+
+So every video opened in place of a playing one, by `Player.Open` or a pick
+from a listing, reaches an add-on as a resume of the **outgoing** file and then
+a start of the new one. Observed on 22.0 RC1 with a script that logs each
+`xbmc.Player` callback and what `getPlayingFile()` returns inside it: one clip
+opened over a playing clip, then one opened over a paused clip.
+
+    18:19:22.308 onPlayBackStarted  playing=kd-a.mp4
+    18:19:22.409 onAVStarted        playing=kd-a.mp4
+    18:19:28.309 onPlayBackResumed  playing=kd-a.mp4    never paused
+    18:19:28.433 onPlayBackStarted  playing=kd-b.mp4
+    18:19:28.534 onAVStarted        playing=kd-b.mp4
+    18:19:34.316 onPlayBackPaused   playing=kd-b.mp4
+    18:19:37.422 onPlayBackResumed  playing=kd-b.mp4    Kodi unpauses it first
+    18:19:37.524 onPlayBackStarted  playing=kd-a.mp4
+
+A JSON-RPC listener saw the same order at both opens: `Player.OnResume` for the
+outgoing file with `speed: 1`, then `Player.OnPlay` for the new one.
+`GUI_MSG_PLAYBACK_RESUMED` announces `OnResume` with the application's current
+item (`xbmc/application/ApplicationMessageHandling.cpp` line 782 at
+`22.0rc1-Piers`).
+
+- **A resume that follows no pause is not an unpause.** A handler that takes
+  every resume for the user pressing play (re-pausing to wait for a peer,
+  telling a server) acts on a resume nobody made, just before a start. Keep the
+  last pause or resume your handlers saw, and treat a resume as an unpause only
+  when a pause came before it.
+- **Over a paused file the resume is real.** Kodi unpauses the outgoing file
+  before it opens the next one, and at that moment nothing tells it apart from
+  the user pressing play. Only the start that follows does.
+- **`getPlayingFile()` inside that resume named the outgoing file** in the run
+  above. It returns the application's current item
+  (`xbmc/interfaces/legacy/Player.cpp` line 380), which is replaced when
+  `GUI_MSG_PLAYBACK_STARTED` is handled (`ApplicationMessageHandling.cpp` line
+  509), after the resume was raised.
+
 ## Identify the item from the notification, not from your own pipeline
 
 Resolving an item from `Player.OnPlay` via its Kodi id and a database lookup takes
@@ -175,8 +225,15 @@ call; the cost moved into the widgets.
 - An `OnAdd` payload for a non-library item has no path, and no error says so.
 - A slow handler degrades every other add-on, with nothing pointing at you.
 - Debug logging shows no announcements at all; the absence proves nothing.
+- A video opened over a playing one announces a resume of the outgoing file,
+  which was never paused.
 
 ## Open questions
+
+- Whether `getPlayingFile()` inside the resume that precedes an open can name
+  the incoming file has not been observed. The sources allow it when the
+  add-on's thread takes the callback after `GUI_MSG_PLAYBACK_STARTED` has been
+  handled.
 
 - Whether `Playlist.OnClear`'s non-empty-only behaviour is identical for video
   playlists has not been checked — only the music path was traced.

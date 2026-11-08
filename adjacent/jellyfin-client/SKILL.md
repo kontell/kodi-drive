@@ -199,10 +199,43 @@ shared stream opens and persists until the consumer count reaches zero, so
 falsely showed no difference before that was understood.
 
 Related, and worth checking if you see this: **every
-`PlaybackInfo(AutoOpenLiveStream)` adds a consumer**, and only a correctly-formed
-`POST /LiveStreams/Close?liveStreamId=X` decrements one. A client that never closes
-leaks them — one observed stream reached 7 consumers and stayed alive 5 hours
-after playback stopped.
+`PlaybackInfo(AutoOpenLiveStream)` adds a consumer**, and three things take one
+back: a correctly-formed `POST /LiveStreams/Close?liveStreamId=X`, a Stopped report
+that names the `LiveStreamId`, and the idle kill of a transcode (next section). A
+client that never closes leaks them — one observed stream reached 7 consumers and
+stayed alive 5 hours after playback stopped.
+
+## A transcode's idle kill closes its live stream
+
+An HLS transcoding job that no request has pinged for 60 s is killed by its timer,
+and that kill closes the job's live stream: `OnTranscodeKillTimerStopped` calls
+`KillTranscodingJob(job, true, …)`, whose `closeLiveStream` branch calls
+`CloseLiveStreamIfNeededAsync(job.LiveStreamId, job.PlaySessionId)`
+(`MediaBrowser.MediaEncoding/Transcoding/TranscodeManager.cs`, `PingTimer` for the
+60 s; a progressive job's is 10 s). A stream id no playback report named is closed
+unconditionally (`SessionManager.CloseLiveStreamIfNeededAsync`, its `else` branch).
+
+Observed on 12.4.0, with a client whose stop report and close were both refused:
+about 56 s after each stop the server logged `Transcoding kill timer stopped for
+JobId … Killing transcoding`, then, once ffmpeg had exited, `Live stream "<id>"
+consumer count is now 0` and `Closing live stream`.
+
+- **A transcoded play whose close never arrives holds its stream for about a
+  minute, not for good.** The timer belongs to the `TranscodingJob`, so an open
+  with no job behind it, such as a `PlaybackInfo` whose play never started, has
+  none (inferred from the source above).
+- **The late close takes back whatever the stream holds by then.** Every open of a
+  channel shares one `LiveStreamId`, so a re-tune of the same channel inside that
+  minute is the open it consumes. Observed: a first play's kill took the count
+  from 1 to 0 and closed the stream that a second play of the channel had opened
+  since.
+- **A Stopped report kills the job without closing the stream.**
+  `PlaystateController` stops through `KillTranscodingJobs`, which passes
+  `closeLiveStream: false`, and `OnPlaybackStopped` closes only a `LiveStreamId`
+  the report names. A client that leaves it out of the report must send the
+  close itself. Observed: after such a report the job stopped at once, and the
+  stream closed only on the client's `POST /LiveStreams/Close`, 48 ms after the
+  server logged the stop.
 
 ## A late close can shut the stream someone is watching
 
@@ -309,6 +342,20 @@ same function Kodi's curl default comes from
   A JSON or form body returns HTTP 400 and leaks the tuner consumer.
 - **Do not send `MediaSourceId` for live TV `PlaybackInfo`** — it returns
   `NoCompatibleStream`.
+- **An `Authorization` header value must be ASCII or UTF-8; percent-encode the
+  device name.** A byte that is not valid UTF-8 gets a 400. Observed on 12.4.0,
+  unauthenticated `GET /System/Info/Public`: `Device="K\xfcche"` 400; the same
+  name in UTF-8, a Cyrillic one in UTF-8, or `K%C3%BCche`, 200. A signed-in POST
+  with the Latin-1 name got the same 400 on 12.0.0. Python's `http.client`
+  encodes header values as Latin-1 (`HTTPConnection.putheader`), so a device name
+  such as "Küche" gets that 400, and one Latin-1 cannot carry (Cyrillic, CJK, a
+  typographic apostrophe) raises `UnicodeEncodeError` before anything is sent.
+  The server URL-decodes every value of the header
+  (`Jellyfin.Server.Implementations/Security/AuthorizationContext.cs`,
+  `WebUtility.UrlDecode`), so a name percent-encoded as `encodeURIComponent`
+  encodes it is recorded as typed. Observed on 12.0.0: `/Sessions` read
+  `DeviceName` back as `Küche`, `Гостиная` and `A "quoted", name+plus`;
+  unencoded, the last was recorded as `A quoted, name plus`.
 - **EPG filtering uses `MaxStartDate`, not `MaxEndDate`.**
 - Use the `Authorization` header and the `ApiKey` query parameter. The deprecated
   `X-Emby-Authorization` and `api_key` forms are being removed — and **from v12

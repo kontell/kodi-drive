@@ -9,7 +9,7 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: playback
-  verified-kodi: "21.3 Omega, 22.0b1 Piers, 23.0-ALPHA1 (master c7c26084f8)"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers, 22.0rc1 Piers, 23.0-ALPHA1 (master c7c26084f8)"
   verified-platform: "Linux x86_64, Android TV, Android phone/tablet"
   verified-date: "2026-10-18"
   verified-method: "observed"
@@ -67,8 +67,9 @@ format, and ISA logs a deprecation warning for it
 (`src/CompKodiProps.cpp:42`, marked *"to be removed on next Kodi release"*). Drop
 it from any property set you are copying from an older example.
 
-Jellyfin's remuxed HLS is exactly that shape, so recordings played through it
-need adaptive. Bump `MinSegments` to 3.
+Jellyfin's remuxed HLS is exactly that shape, so recordings played through an
+inputstream add-on need adaptive. Bump `MinSegments` to 3. Kodi 22's own player
+is the other way in, [below](#kodis-own-player-from-kodi-22).
 
 **ffmpegdirect is the one that can shift a catchup template into the past.** If
 you need catchup or timeshift against a template URL, adaptive will not do it —
@@ -77,6 +78,58 @@ that is ffmpegdirect's catchup mode, and it is the only pipeline for it.
 A related trap worth knowing: a **raw static file** (`?static=true` and similar)
 is not seekable through ffmpegdirect, Kodi's default inputstream, or VLC. A
 remuxed HLS stream with real segment indices is. If seeking matters, remux.
+
+### Kodi's own player, from Kodi 22
+
+With no `inputstream` property, Kodi plays HLS through its own FFmpeg demuxer,
+which on Kodi 22 is FFmpeg 9. Its HLS demuxer keeps an EVENT playlist seekable and
+sets a duration that grows as the playlist is reloaded (`libavformat/hls.c` at
+`n9.0.2`, lines 1155-1170 and 2332-2339). On 22.0-RC1 a growing EVENT playlist
+took seeks to 50 %, back 60 s and to 99.5 %:
+
+```
+demuxer seek to: 800218.000000
+SeekTime - seek ended up on time 798200
+demuxer seek to: 800218.000000, success
+```
+
+Two things still go wrong, and a client cannot fix either from its stream
+properties:
+
+- **An unfinished playlist starts three segments before its end.** That is
+  FFmpeg's `live_start_index`, default `-3` (`hls.c:3031-3032`). Kodi hands FFmpeg
+  only `seekable`, the `reconnect*` and `icy*` options and headers from the URL's
+  protocol options (`DVDDemuxFFmpeg.cpp:848-850` at 22.0rc1 `28ea2eac`), so
+  nothing reaches `live_start_index`. Kodi also opens the stream twice, probing
+  and then reopening with `load_all_variants=0` (line 368), and each open picks
+  its own start. A recording whose transcode had published 10 segments at the
+  probe and 25 at the reopen played from segment 22, at 67 s of 76 s:
+
+  ```
+  [hls] Opening '<SERVER_URL>/videos/<ID>/hls/<ID>/<ID>7.ts' for reading
+  [hls] Opening '<SERVER_URL>/videos/<ID>/hls/<ID>/<ID>22.ts' for reading
+  Duration: 00:01:16.80, start: 10.083000, bitrate: 0 kb/s
+  ```
+
+- **A seek to the very end is ignored.** The end of the seek bar asks for exactly
+  the duration, and `hls_read_seek` finds no segment that contains it. For a
+  realtime item `SeekTime` then reports success without moving
+  (`DVDDemuxFFmpeg.cpp:1426`). For any other item it forces end of file by closing
+  the input stream (line 1424), and `CDVDInputStreamFFmpeg::Close()` does nothing
+  for a stream FFmpeg opened itself (`DVDInputStreamFFmpeg.cpp:53-56`). Playback
+  carries on where it was either way:
+
+  ```
+  demuxer seek to: 792960.000000
+  SeekTime - seek ended up on time 75700
+  demuxer seek to: 792960.000000, success
+  ```
+
+  ```
+  CDVDDemuxFFmpeg::SeekTime - target 8643080000 is past the end of the stream, skipping the seek
+  SeekTime - seek ended up on time 20640
+  VideoPlayer: seek failed or hit end of stream
+  ```
 
 ## Realtime is the add-on's answer, and it defaults to yes
 
@@ -277,6 +330,7 @@ Set before `avformat_find_stream_info()`.
 ## What fails silently
 
 - An EVENT playlist plays but will not seek, with no error.
+- Kodi's own player ignores a seek to the very end of an HLS stream.
 - A missing capability flag turns every seek into a clamp to zero.
 - Emit-time `ptsStart` drifts and the OSD time explodes without erroring.
 - A lost `EAGAIN` packet produces silence only for small-frame codecs.

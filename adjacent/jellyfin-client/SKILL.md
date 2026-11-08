@@ -204,6 +204,45 @@ Related, and worth checking if you see this: **every
 leaks them — one observed stream reached 7 consumers and stayed alive 5 hours
 after playback stopped.
 
+## A late close can shut the stream someone is watching
+
+A close names a `LiveStreamId` and nothing else, and the id does not tell one open
+from another:
+
+- **A channel's `LiveStreamId` is the same on every open.** Observed on `v12.0-rc5`
+  with an M3U tuner: every open of one channel over a session, across server
+  restarts, returned `<tuner>_<channel>_<source>`, the same each time.
+- **An open of a stream the server still holds is counted on that stream**
+  (`src/Jellyfin.LiveTv/DefaultLiveTvService.cs:470`), and a close takes one
+  consumer away, shutting the stream at zero
+  (`Emby.Server.Implementations/Library/MediaSourceManager.cs:1004`).
+- **A close of an id the server does not hold does nothing and still answers
+  204** (`MediaSourceManager.cs:1002`, `Jellyfin.Api/Controllers/MediaInfoController.cs:317`).
+
+So a client that keeps a close to retry later, because the server refused it or
+could not be reached, can take back the wrong open. If the server dropped the
+old stream in the meantime (a restart drops them all) and the same channel has
+been opened again since, the retried close takes the new open's only consumer.
+The server then closes the stream under the player. Observed on Kodi 23.0-ALPHA1
+against the server above, with the held-over close sent when the replay of the
+channel started:
+
+```
+12:19:10 Live stream "<source>" consumer count is now 0
+12:19:10 Live stream "<tuner>_<channel>_<source>" closed successfully
+```
+
+The player's clock stopped at 00:02.
+
+**Send a held-over close only after the playback using that id has sent its
+own.** In that order the count comes out right either way:
+- **The server still held the older open:** it goes 2 → 1 → 0.
+- **It had dropped it:** the playback's own close reaches 0, and the held-over
+  close gets 204 and changes nothing.
+
+Closing it any earlier is right in the first case and shuts the stream in the
+second, and the client cannot tell which case it is in.
+
 ## The HLS master advertises what the server assumed
 
 For a multi-audio-track live source, Jellyfin stream-copies an un-mapped track —

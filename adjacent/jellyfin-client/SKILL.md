@@ -10,9 +10,9 @@ description: >
 license: CC-BY-SA-4.0
 metadata:
   category: adjacent
-  verified-kodi: "21.3 Omega, 22.0b1 Piers, 22.0b2 Piers"
+  verified-kodi: "21.3 Omega, 22.0b1 Piers, 22.0b2 Piers, 22.0-RC1 Piers"
   verified-platform: "Linux x86_64, Android TV, Android phone/tablet"
-  verified-date: "2026-10-12"
+  verified-date: "2026-11-07"
   verified-method: "observed"
 ---
 
@@ -213,6 +213,54 @@ the master playlist.
 **Any player that trusts the manifest opens the wrong decoder.** ffmpeg's own
 mpegts demuxer is unaffected because it reads the PMT.
 
+## A live stream's `Path` can name the server's own loopback
+
+An opened M3U or HDHomeRun stream that the server shares comes back from
+`PlaybackInfo` with `MediaSources[0].Path` set to
+`<api url>/LiveTv/LiveStreamFiles/<id>/stream.ts`. A client that direct-plays
+hands that URL to Kodi as it stands, and its host is not always one Kodi can
+reach.
+
+- The server builds it from `GetApiUrlForLocalAccess()`
+  (`src/Jellyfin.LiveTv/TunerHosts/SharedHttpStream.cs:66`,
+  `HdHomerun/HdHomerunUdpStream.cs:150`), and v12 re-bases it on the requesting
+  client's smart API URL (`Jellyfin.Api/Helpers/MediaInfoHelper.cs:550`).
+- When no non-loopback interface survives the server's interface filtering,
+  the bind address falls back to `127.0.0.1`, or to `::1` for an IPv6 source
+  with IPv6 enabled or with IPv4 disabled
+  (`src/Jellyfin.Networking/Manager/NetworkManager.cs:922`).
+  A published-server override can name any host at all.
+- `::1` arrives bracketed, as `http://[::1]:8096/...`. **A host parser that
+  stops at the first colon reads that host as `[`**, so an exact-match rewrite
+  of `127.0.0.1` and `localhost` silently passes it through. End an IPv6
+  literal's host at `]`.
+
+Observed against a v12 server answering `http://[::1]:<port>` (recipe in
+[`jellyfin-test-server`](../jellyfin-test-server/SKILL.md#a-live-tv-source-that-direct-plays)):
+Kodi 22.0-RC1 logs `CCurlFile::Open - <http://[::1]:<port>/LiveTv/LiveStreamFiles/<id>/stream.ts> Failed with code 0`
+and the channel does not play. Rewriting the bracketed host to the address the
+add-on reached the server on plays it.
+
+## A Python add-on's requests carry `Python-urllib`
+
+A binary add-on's `kodi::vfs::CFile` requests go out through Kodi's curl with
+Kodi's User-Agent (`xbmc/filesystem/CurlFile.cpp:679`). A Python add-on's
+`urllib.request` sends Python's default. Observed from one add-on on Kodi
+22.0-RC1, through a logging proxy:
+
+```
+POST /Items/<id>/PlaybackInfo   ua='Kodi/22.0-RC1 (X11; Linux x86_64) ...'   # C++ half
+POST /Sessions/Playing          ua='Python-urllib/3.13'                      # service script
+```
+
+A proxy that screens user agents can therefore pass one half of an add-on and
+refuse the other. Live TV plays while the server never hears the playback
+reports, and a refused `/LiveStreams/Close` leaves the tuner stream open on
+the server. **Set `User-Agent` explicitly.** `xbmc.getUserAgent()` returns
+`CSysInfo::GetUserAgent()` (`xbmc/interfaces/legacy/ModuleXbmc.cpp:555`), the
+same function Kodi's curl default comes from
+(`xbmc/settings/AdvancedSettings.cpp:559`), so it makes both halves look alike.
+
 ## Request shapes that fail opaquely
 
 - **`SortBy` and `SortOrder` must have matching arity.** One field with two orders
@@ -382,6 +430,9 @@ for the same session, so replaying a failing URL after a successful one returns
 - Albums sorted by `DateCreated` presenting a rescan as recent additions.
 - `Fields=People` on a whole-library query turning a sub-second listing into a
   40-second one, with nothing in the response to say why.
+- Playback reports a User-Agent-screening proxy refused: the stream plays, the
+  dashboard stays empty, and the stream the client stopped stays open on the
+  server.
 
 ## Open questions
 
@@ -390,6 +441,10 @@ for the same session, so replaying a failing URL after a successful one returns
 - The 10.9 user-scoped route migration: 10.11 still serves the old shape while
   having dropped it from the OpenAPI spec, so the spec is not a reliable guide to
   what a given server accepts. When it will actually be removed is unknown.
+- Which proxies refuse `Python-urllib`. A user reported Cloudflare's Browser
+  Integrity Check (on by default) doing so, with the 403s in Cloudflare's
+  security events (kontell/pvr.kofin#105). That has not been reproduced against
+  Cloudflare here; the observation above used a stand-in proxy.
 
 ## See also
 

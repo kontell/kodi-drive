@@ -12,7 +12,7 @@ metadata:
   category: adjacent
   verified-kodi: "21.3 Omega, 22.0b1 Piers, 22.0b2 Piers, 22.0-RC1 Piers"
   verified-platform: "Linux x86_64, Android TV, Android phone/tablet"
-  verified-date: "2026-11-08"
+  verified-date: "2026-11-07"
   verified-method: "observed"
 ---
 
@@ -237,6 +237,45 @@ consumer count is now 0` and `Closing live stream`.
   stream closed only on the client's `POST /LiveStreams/Close`, 48 ms after the
   server logged the stop.
 
+## A late close can shut the stream someone is watching
+
+A close names a `LiveStreamId` and nothing else, and the id does not tell one open
+from another:
+
+- **A channel's `LiveStreamId` is the same on every open.** Observed on `v12.0-rc5`
+  with an M3U tuner: every open of one channel over a session, across server
+  restarts, returned `<tuner>_<channel>_<source>`, the same each time.
+- **An open of a stream the server still holds is counted on that stream**
+  (`src/Jellyfin.LiveTv/DefaultLiveTvService.cs:470`), and a close takes one
+  consumer away, shutting the stream at zero
+  (`Emby.Server.Implementations/Library/MediaSourceManager.cs:1004`).
+- **A close of an id the server does not hold does nothing and still answers
+  204** (`MediaSourceManager.cs:1002`, `Jellyfin.Api/Controllers/MediaInfoController.cs:317`).
+
+So a client that keeps a close to retry later, because the server refused it or
+could not be reached, can take back the wrong open. If the server dropped the
+old stream in the meantime (a restart drops them all) and the same channel has
+been opened again since, the retried close takes the new open's only consumer.
+The server then closes the stream under the player. Observed on Kodi 23.0-ALPHA1
+against the server above, with the held-over close sent when the replay of the
+channel started:
+
+```
+12:19:10 Live stream "<source>" consumer count is now 0
+12:19:10 Live stream "<tuner>_<channel>_<source>" closed successfully
+```
+
+The player's clock stopped at 00:02.
+
+**Send a held-over close only after the playback using that id has sent its
+own.** In that order the count comes out right either way:
+- **The server still held the older open:** it goes 2 → 1 → 0.
+- **It had dropped it:** the playback's own close reaches 0, and the held-over
+  close gets 204 and changes nothing.
+
+Closing it any earlier is right in the first case and shuts the stream in the
+second, and the client cannot tell which case it is in.
+
 ## The HLS master advertises what the server assumed
 
 For a multi-audio-track live source, Jellyfin stream-copies an un-mapped track —
@@ -245,6 +284,54 @@ the master playlist.
 
 **Any player that trusts the manifest opens the wrong decoder.** ffmpeg's own
 mpegts demuxer is unaffected because it reads the PMT.
+
+## A live stream's `Path` can name the server's own loopback
+
+An opened M3U or HDHomeRun stream that the server shares comes back from
+`PlaybackInfo` with `MediaSources[0].Path` set to
+`<api url>/LiveTv/LiveStreamFiles/<id>/stream.ts`. A client that direct-plays
+hands that URL to Kodi as it stands, and its host is not always one Kodi can
+reach.
+
+- The server builds it from `GetApiUrlForLocalAccess()`
+  (`src/Jellyfin.LiveTv/TunerHosts/SharedHttpStream.cs:66`,
+  `HdHomerun/HdHomerunUdpStream.cs:150`), and v12 re-bases it on the requesting
+  client's smart API URL (`Jellyfin.Api/Helpers/MediaInfoHelper.cs:550`).
+- When no non-loopback interface survives the server's interface filtering,
+  the bind address falls back to `127.0.0.1`, or to `::1` for an IPv6 source
+  with IPv6 enabled or with IPv4 disabled
+  (`src/Jellyfin.Networking/Manager/NetworkManager.cs:922`).
+  A published-server override can name any host at all.
+- `::1` arrives bracketed, as `http://[::1]:8096/...`. **A host parser that
+  stops at the first colon reads that host as `[`**, so an exact-match rewrite
+  of `127.0.0.1` and `localhost` silently passes it through. End an IPv6
+  literal's host at `]`.
+
+Observed against a v12 server answering `http://[::1]:<port>` (recipe in
+[`jellyfin-test-server`](../jellyfin-test-server/SKILL.md#a-live-tv-source-that-direct-plays)):
+Kodi 22.0-RC1 logs `CCurlFile::Open - <http://[::1]:<port>/LiveTv/LiveStreamFiles/<id>/stream.ts> Failed with code 0`
+and the channel does not play. Rewriting the bracketed host to the address the
+add-on reached the server on plays it.
+
+## A Python add-on's requests carry `Python-urllib`
+
+A binary add-on's `kodi::vfs::CFile` requests go out through Kodi's curl with
+Kodi's User-Agent (`xbmc/filesystem/CurlFile.cpp:679`). A Python add-on's
+`urllib.request` sends Python's default. Observed from one add-on on Kodi
+22.0-RC1, through a logging proxy:
+
+```
+POST /Items/<id>/PlaybackInfo   ua='Kodi/22.0-RC1 (X11; Linux x86_64) ...'   # C++ half
+POST /Sessions/Playing          ua='Python-urllib/3.13'                      # service script
+```
+
+A proxy that screens user agents can therefore pass one half of an add-on and
+refuse the other. Live TV plays while the server never hears the playback
+reports, and a refused `/LiveStreams/Close` leaves the tuner stream open on
+the server. **Set `User-Agent` explicitly.** `xbmc.getUserAgent()` returns
+`CSysInfo::GetUserAgent()` (`xbmc/interfaces/legacy/ModuleXbmc.cpp:555`), the
+same function Kodi's curl default comes from
+(`xbmc/settings/AdvancedSettings.cpp:559`), so it makes both halves look alike.
 
 ## Request shapes that fail opaquely
 
@@ -429,6 +516,9 @@ for the same session, so replaying a failing URL after a successful one returns
 - Albums sorted by `DateCreated` presenting a rescan as recent additions.
 - `Fields=People` on a whole-library query turning a sub-second listing into a
   40-second one, with nothing in the response to say why.
+- Playback reports a User-Agent-screening proxy refused: the stream plays, the
+  dashboard stays empty, and the stream the client stopped stays open on the
+  server.
 
 ## Open questions
 
@@ -437,6 +527,10 @@ for the same session, so replaying a failing URL after a successful one returns
 - The 10.9 user-scoped route migration: 10.11 still serves the old shape while
   having dropped it from the OpenAPI spec, so the spec is not a reliable guide to
   what a given server accepts. When it will actually be removed is unknown.
+- Which proxies refuse `Python-urllib`. A user reported Cloudflare's Browser
+  Integrity Check (on by default) doing so, with the 403s in Cloudflare's
+  security events (kontell/pvr.kofin#105). That has not been reproduced against
+  Cloudflare here; the observation above used a stand-in proxy.
 
 ## See also
 

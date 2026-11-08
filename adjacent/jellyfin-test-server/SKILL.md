@@ -240,6 +240,54 @@ POST + DELETE only and a GET returns **405**. The configured set is readable onl
 from `GET /System/Configuration/livetv`, which is also where `RecordingPath` is
 set. Identical in 10.11.
 
+## A Live TV source that direct-plays
+
+Verified on `v12.0-rc5`. A client's direct-play path needs an M3U channel the
+server opens as a shared stream, which is the one that answers with a
+`/LiveTv/LiveStreamFiles/<id>/stream.ts` `Path`. Two conditions, and a trap.
+
+**The tuner needs `AllowStreamSharing: true`**, and the channel URL needs a
+`.ts`, `.tsv` or `.m2t` extension, or an extensionless URL whose `HEAD` answers
+`video/MP2T` (`src/Jellyfin.LiveTv/TunerHosts/M3UTunerHost.cs:97`). Otherwise the
+server plays the source URL itself.
+
+**A static file is not a live source.** Served from a plain HTTP server on the
+same host, the whole file is copied into the buffer at disk speed, the stream
+ends, and the buffer is deleted before the server probes it:
+
+```
+10:40:58.367 Beginning "SharedHttpStream" stream to ".../transcodes/<id>.ts"
+10:40:58.477 Deleting temp file ".../transcodes/<id>.ts"
+10:41:01.371 Error processing request: "Could not find file '.../transcodes/<id>.ts'"
+10:41:01.372 Error probing live tv stream ... ffprobe failed - streams and format are both null.
+```
+
+With the probe failed, the media streams carry no codec, `SupportsDirectPlay`
+comes back `false`, and every client gets a `TranscodingUrl`. A server that
+sends the file at its own bitrate (a `ThreadingHTTPServer` that sleeps to stay
+two seconds ahead is enough) makes the same channel come back with
+`SupportsDirectPlay: true`, `Container: ts`, the real codecs, and no
+`TranscodingUrl`.
+
+**To hand a client an unreachable loopback `Path`**, set
+`PublishedServerUriBySubnet` to `["all=http://[::1]:<port>"]` with `EnableIPv6`
+false, through `GET`/`POST /System/Configuration/network`. It applies without a
+restart. The next `PlaybackInfo` answers
+`Path: http://[::1]:<port>/LiveTv/LiveStreamFiles/<id>/stream.ts`, and nothing
+listens there, because the server binds IPv4 only:
+
+```
+$ curl -s -o /dev/null -w '%{http_code} %{errormsg}\n' 'http://[::1]:<port>/System/Info/Public'
+000 Failed to connect to ::1 port <port> after 0 ms: Could not connect to server
+```
+
+A Kodi on the same host then fails exactly as one on another host would. Clear
+the list to undo it.
+
+A channel's `LiveStreamId` is the same on every open. A stream left open by an
+earlier run is still open under that id, so restart the server between a
+before-run and an after-run that measure whether a close lands.
+
 ## Verifying it
 
 ```sh

@@ -5,11 +5,12 @@ description: >
   find the log on any platform, grep for the right severity, and read a crashlog.
   Use whenever you need to know what Kodi actually did, are about to reproduce a
   bug, or a user has reported a problem. Covers the lower-case severity trap that
-  makes a naive error grep report every run clean.
+  makes a naive error grep report every run clean, and the duplicate filter that
+  makes a count of log lines undercount what logged them.
 license: CC-BY-SA-4.0
 metadata:
   category: diagnosis
-  verified-kodi: "21.3 Omega, 22.0 beta Piers"
+  verified-kodi: "21.3 Omega, 22.0 beta Piers, 22.0 RC1 Piers, 23.0-ALPHA1"
   verified-platform: "Linux x86_64"
   verified-date: "2026-08-27"
   verified-method: "observed"
@@ -87,6 +88,57 @@ grep -iE '[[:space:]](error|warning|fatal|severe)[[:space:]]+<' kodi.log
 `kodi-logtail errors` does this. Use `kodi-logtail addon-errors` for the
 add-on-level severities, which live in the message body and *are* uppercase by
 convention.
+
+## Identical lines are collapsed, so a line count is not an event count
+
+Kodi writes `kodi.log` through spdlog's `dup_filter_sink` with a 10 s window
+(sourced: `xbmc/utils/log.cpp`, lines 122–128 at `21.3-Omega`, 169–175 on
+master `9abafab`). A line whose text matches the last line written, less than
+10 s after it, is dropped, and the next line written is preceded by the number
+dropped. Five identical `xbmc.log` calls and then a different one, on 22.0 RC1
+and 23.0-ALPHA1:
+
+```
+info <general>: dupcheck: same line
+info <general>: Skipped 4 duplicate messages..
+info <general>: dupcheck: different line
+```
+
+**A count of lines undercounts whatever logged them** — retries, requests,
+failed rows. Add the `Skipped N` figures, or count from something other than
+the log.
+
+- **Only the message text is compared**, not the thread, the `<component>` or
+  the level (sourced: `filter_` in spdlog's `sinks/dup_filter_sink.h`). Any
+  other line written in between, from any thread, ends the run.
+- **A run that goes on is written again once 10 s have passed.** The window
+  runs from the last copy written. The same line logged every 4 s, with nothing
+  else logging, was written every third time, each copy preceded by
+  `Skipped 2 duplicate messages..`.
+- **The notice belongs to the line that ends the run, not to the dropped
+  ones.** It carries that line's thread and `<component>` (sourced: the notice
+  is built from the next message's `logger_name`). Three identical warnings
+  from one thread, then a line from another:
+
+  ```
+  T:133   warning <general>: dupcheck: warned
+  T:134   warning <general>: Skipped 2 duplicate messages..
+  T:134      info <general>: dupcheck: from another thread
+  ```
+
+  A grep for one add-on's `<component>` misses the count of its own dropped
+  lines, and picks up counts that belong to others.
+- **The notice's level depends on the spdlog build.** spdlog 1.17.0, which
+  master's `tools/depends` pin and the two builds above link, gives it the
+  dropped lines' level, as shown. spdlog 1.10.0, which `21.3-Omega`'s depends
+  pin, writes it at `info` (sourced: `dup_filter_sink.h` at spdlog `v1.10.0`),
+  so the severity grep above does not see that errors were dropped at all.
+  Linux distribution builds link the system spdlog.
+- **Android's logcat gets every line.** Only the file sink sits behind the
+  filter; the platform sinks are added beside it (sourced: `m_platform->AddSinks`
+  in `xbmc/utils/log.cpp`, and `AndroidInterfaceForCLog.cpp`, which adds
+  spdlog's `android_sink`). When a count matters on Android, `adb logcat` has
+  the lines `kodi.log` dropped.
 
 ## Turning debug logging on
 

@@ -263,8 +263,9 @@ Build the directory as Kodi does: `multipath://`, then each path encoded by
 followed by `/` (`xbmc/filesystem/MultiPathDirectory.cpp` lines 112–127 and
 165–169, `xbmc/URL.cpp` line 606, `xbmc/utils/URIUtils.h` lines 33–38, at
 `d686683a55`). In Python,
-`"multipath://" + "".join(quote(p, safe="!()") + "/" for p in paths)`, which
-every run below used.
+`"multipath://" + "".join(quote(p, safe="!()") + "/" for p in paths)`; the
+runs below encoded the local folders with `safe=""` and the plugin folders
+with `safe="!()"`, and Kodi split both.
 
 Observed on 22.0b2 (LibreELEC, Raspberry Pi 3), 22.0-RC2 (Android TV) and a
 23.0 alpha build with extra pull requests (Android TV), with ten local movie

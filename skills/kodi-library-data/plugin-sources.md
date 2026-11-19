@@ -240,6 +240,77 @@ scan, wait for `OnScanFinished` (or for `Library.IsScanningVideo` /
 `Library.IsScanningMusic` to drop), then issue the next. A user's own
 "Update library" during an add-on's scan does the same to it.
 
+## Several folders in one video scan: `multipath://`
+
+`VideoLibrary.Scan` takes a `multipath://` directory and scans every folder in
+it in one job. `CVideoInfoScanner::Start` splits the directory
+(`CMultiPathDirectory::GetPaths`) and puts each folder, with every path row the
+database holds below it, into `m_pathsToScan`; `Process` then scans the set's
+first entry until the set is empty, testing each with `CDirectory::Exists` as
+it would a folder scanned alone, between one `OnScanStarted` and one
+`OnScanFinished` (`xbmc/video/VideoInfoScanner.cpp` lines 218–323 and 330–365
+at `d686683a55`, 22.0rc2-Piers; lines 223–329 and 336–371 at master
+`d46135ca50`). `m_pathsToScan` is a `std::set` (`xbmc/InfoScanner.h` line 82),
+so the folders are scanned in path order, not in the order given. Each untagged
+`OnScanFinished` has every visible widget that lists video items list itself
+again (`xbmc/guilib/listproviders/DirectoryProvider.cpp` lines 101–106 and
+605–622 at `d686683a55`; [kodi-announcements](../kodi-announcements/SKILL.md)), so
+folders scanned together cost each widget one listing where separate scans
+cost one each.
+
+Build the directory as Kodi does: `multipath://`, then each path encoded by
+`CURL::Encode`, which leaves letters, digits and `-._!()` as they are, each
+followed by `/` (`xbmc/filesystem/MultiPathDirectory.cpp` lines 112–127 and
+165–169, `xbmc/URL.cpp` line 606, `xbmc/utils/URIUtils.h` lines 33–38, at
+`d686683a55`). In Python,
+`"multipath://" + "".join(quote(p, safe="!()") + "/" for p in paths)`, which
+every run below used.
+
+Observed on 22.0b2 (LibreELEC, Raspberry Pi 3), 22.0-RC2 (Android TV) and a
+23.0 alpha build with extra pull requests (Android TV), with ten local movie
+folders each bound with `metadata.local` and six video widgets on Home, two
+runs each:
+
+```json
+{"method": "VideoLibrary.Scan", "params": {"showdialogs": true,
+ "directory": "multipath://%2Fstorage%2F.kodi%2Ftemp%2Fbench476-media%2FBench%2001%20%282001%29%2F/…/"}}
+```
+
+```text
+VideoInfoScanner: Starting scan .. (grouping of similar videos is off)
+VideoInfoScanner: Adding new item to movies:/storage/.kodi/temp/bench476-media/Bench 01 (2001)/Bench 01 (2001).mkv
+…
+VideoInfoScanner: Finished scan. Scanning for video info took 185 ms
+```
+
+| Ten folders | 22.0b2, Pi 3 | 22.0-RC2, Android TV | 23.0 alpha, Android TV |
+|---|---|---|---|
+| Scans (`Starting scan` lines) | 10 → 1 | 10 → 1 | 10 → 1 |
+| Widget listings (`CDirectoryProvider[…]: refreshing`) | 60 → 6 | 60 → 6 | 40–50 → 6 |
+| Time from the first call to the last scan's end, mean | 18.3 s → 2.0 s | 12.9 s → 1.0 s | 9.0 s → 0.5 s |
+
+Every folder was filed both ways. A plugin's bound folders behave the same:
+on 22.0-RC1, one scan of four plugin movie folders and one of three plugin
+show folders filed every row, one `Starting scan` / `Finished scan` pair each.
+
+**Listings made for the scan's sake have to outlast all of it.** A listing an
+add-on makes before a scan so that the phantom-disc probe finds it in the cache
+([above](#a-plugin-folder-listed-in-a-movies-directory-becomes-a-phantom-disc))
+is now made for every folder before the scan starts, and the scanner lists
+each folder before it reaches the next, out of a cache of fifty listings that
+drops the least recently used
+([below](#a-music-scan-re-lists-every-album-it-added-out-of-a-cache-of-fifty)).
+Count those listings and one per folder, and keep the sum well under fifty
+(inferred from the two sections cited). Observed on the 23.0 alpha build: three
+plugin movie folders with extras, their extras folders and the `VIDEO_TS/` and
+`BDMV/` below them listed beforehand, scanned as one multipath, filed every
+extra and no `VIDEO_TS.IFO`.
+
+The music scanner has no such split: `CMusicInfoScanner::Start` puts the
+directory it is given into `m_pathsToScan` whole
+(`xbmc/music/infoscanner/MusicInfoScanner.cpp` lines 300–331 at
+`d686683a55`).
+
 ## A clean given a directory still tests every bound folder, and a test that never runs deletes
 
 `VideoLibrary.Clean` takes a `directory`, and Kodi turns it into the set of

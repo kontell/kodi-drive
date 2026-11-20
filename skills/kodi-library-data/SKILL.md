@@ -191,6 +191,7 @@ The scanner-side facts live in [plugin-sources.md](plugin-sources.md), one secti
 - A music scan with a dialog lists every directory twice
 - A plugin folder listed in a movies directory becomes a phantom disc
 - A scan requested while one is running stops it
+- Several folders in one video scan: `multipath://`
 - Refreshing a show keeps its rows only without `refreshepisodes`
 - A clean given a directory still tests every bound folder
 - A stopped music scan leaves a directory hash without its songs
